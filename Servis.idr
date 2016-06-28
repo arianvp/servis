@@ -1,6 +1,6 @@
+module Servis
 
-Map : Type -> Type -> Type
-Map k v = List (k, v)
+import Data.SortedMap
 
 data Path : Type where
   Const : String -> Path
@@ -10,12 +10,23 @@ data Handler : Type where
 
 data Verb : Type where
   GET : Verb
-  PUT : Verb
   POST : Verb
-  DELETE : Verb
+
+Eq Verb where
+  GET == GET = True
+  POST == POST = True
+  _  == _ = False
+
+Ord Verb where
+  compare GET POST  = LT
+  compare POST POST = EQ
+  compare GET GET = EQ
+  compare POST GET = GT
+
+
 
 data Api : Type where
-  Endpoint : Map Verb Handler -> Api
+  Endpoint : SortedMap Verb Handler -> Api
   -- OneOf    : List Api -> Api  TODO implement
   (:>)     : Path -> Api -> Api
 
@@ -25,17 +36,17 @@ data ApiUser
 
 --  "GET /users/1"
 userApi : Api
-userApi = Segment "userId" Int :> Endpoint [(GET, ?api)]
+userApi = Segment "userId" Int :> Endpoint (fromList [(GET, ?api)])
 
 
-interpretApi : Api -> Type
-interpretApi a = Int -> IO ApiUser
+el : Api -> Type
+el api = ?a
 
 getFromDatabase : Int -> IO ApiUser
-getFromDatabase = ?magichappenshere
+getFromDatabase userId = ?query "select * from users where id={userId}"
 
 -- here is where the magic happens!!!
-handleUserApi : interpretApi (userApi)
+handleUserApi : el userApi
 handleUserApi = getFromDatabase
 
 {-data Path : Type where
