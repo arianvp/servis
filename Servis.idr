@@ -1,13 +1,13 @@
 module Servis
 
-public export
-Map : Type -> Type -> Type
-Map k v = List (k,v)
+
+
 
 public export data Path : Type where
   Const : String -> Path
   Segment : String -> Type -> Path
 
+public export
 pathType : Path -> Type -> Type
 pathType (Const s) type = type
 pathType (Segment s type1) type2 = type1 -> type2
@@ -26,15 +26,13 @@ public export data Method : Type where
   POST : (requestBody : Type) -> (response : Type) -> Method
 
   -- | Capture any query parameters
-  QueryParam : String -> (queryParam : Type) -> Method -> Method
+  QueryParam : (paramName : String) -> (queryParam : Type) -> (sub : Method) -> Method
 
-
+public export
 methodType : Method  -> Type
 methodType (GET response) =  IO response
 methodType (POST requestBody response)  = requestBody -> IO response
-methodType (QueryParam y queryParam z)  = queryParam -> methodType z
-
-
+methodType (QueryParam paramName queryParam sub)  = queryParam -> methodType sub
 
 
 public export data Api : Type where
@@ -42,11 +40,16 @@ public export data Api : Type where
   -- OneOf    : List Api -> Api  TODO implement
   (:>)     : Path -> Api -> Api
 
-infixr 5 :>
+  (:<|>) : Api -> Api -> Api
 
+infixr 9 :>
+infixr 8 :<|>
+
+public export
 apiType : Api -> Type
 apiType (path :> api) = pathType path (apiType api)
 apiType (Endpoint x) =  methodType x
+apiType (api1 :<|> api2) = (apiType api1, apiType api2)
 
 
 -- Tussen 10 en 12 en 2 tot 4
