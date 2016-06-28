@@ -21,29 +21,22 @@ data Api : Type where
 
 infixr 5 :>
 
+data ApiUser
 
-
-data User = User { userId : Int, userName : String,  password : String }
-
-
-
-
-"GET /users/1"
+--  "GET /users/1"
 userApi : Api
-userApi = Segment "userId" String :> Endpoint [(GET, User)]
+userApi = Segment "userId" Int :> Endpoint [(GET, ?api)]
 
 
 interpretApi : Api -> Type
+interpretApi a = Int -> IO ApiUser
 
-intepretUser userApi =  Int -> User
-
-
-
-
-
-getFromDatabase : Int -> User
+getFromDatabase : Int -> IO ApiUser
 getFromDatabase = ?magichappenshere
 
+-- here is where the magic happens!!!
+handleUserApi : interpretApi (userApi)
+handleUserApi = getFromDatabase
 
 {-data Path : Type where
   Const    : String -> Path
