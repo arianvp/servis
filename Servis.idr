@@ -46,6 +46,10 @@ infixr 9 :>
 infixr 8 :<|>
 
 public export
+path : String -> Api -> Api
+path path api = foldr (:>) api . map Const . split (== '/') $ path
+
+public export
 apiType : Api -> Type
 apiType (path :> api) = pathType path (apiType api)
 apiType (Endpoint x) =  methodType x

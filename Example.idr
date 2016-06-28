@@ -8,14 +8,10 @@ data User = MkUser Int String
 userApi : Api
 userApi
   =
-    Const "v1" :> Const "user" :> Segment "userId" Int :>
-       Endpoint (GET User)
+    path "v1/user" (Segment "userId" Int :> Endpoint (GET User))
   :<|>
-    Const "v1" :> Const "user" :>
-      Endpoint (QueryParam "limit" Nat $ GET (List User))
-  :<|>
-    Const "v1" :> Const "user" :>
-      Endpoint (POST User User)
+    path "v1/user" (Endpoint $ QueryParam "limit" Nat $ GET $ List User)
+  :<|>  path "v1/user" (Endpoint $ POST User User)
 
 getUser : (userId : Int) -> IO User
 getUser userId = ?query "select * from users where id={userId}"
