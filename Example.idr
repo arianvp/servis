@@ -5,8 +5,8 @@ import Data.Vect
 data User = MkUser Int String
 
 
-userApi : Api
-userApi
+UserApi : Api
+UserApi
   =
     path "v1/user" (Segment "userId" Int :> Endpoint (GET User))
   :<|>
@@ -23,5 +23,5 @@ getUsers limit = ?query "select * from users limit {limit}"
 postUser : User -> IO User
 
 
-api : apiType Example.userApi
+api : ApiType Example.UserApi
 api = (getUser, getUsers, postUser)
