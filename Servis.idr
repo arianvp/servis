@@ -1,16 +1,14 @@
 module Servis
 
+public export data PathPart : Type where
+  Const : String -> PathPart
+  Segment : String -> Type -> PathPart
 
-
-
-public export data Path : Type where
-  Const : String -> Path
-  Segment : String -> Type -> Path
 
 public export
-pathType : Path -> Type -> Type
-pathType (Const s) type = type
-pathType (Segment s type1) type2 = type1 -> type2
+pathPartType : PathPart -> Type -> Type
+pathPartType (Const s) type = type
+pathPartType (Segment s type1) type2 = type1 -> type2
 
 
 -- TODO: Currently we assume request body is json or whatever.
@@ -38,7 +36,7 @@ methodType (QueryParam paramName queryParam sub)  = queryParam -> methodType sub
 public export data Api : Type where
   Endpoint : Method -> Api
   -- OneOf    : List Api -> Api  TODO implement
-  (:>)     : Path -> Api -> Api
+  (:>)     : PathPart -> Api -> Api
 
   (:<|>) : Api -> Api -> Api
 
@@ -51,7 +49,7 @@ path path api = foldr (:>) api . map Const . split (== '/') $ path
 
 public export
 apiType : Api -> Type
-apiType (path :> api) = pathType path (apiType api)
+apiType (path :> api) = pathPartType path (apiType api)
 apiType (Endpoint x) =  methodType x
 apiType (api1 :<|> api2) = (apiType api1, apiType api2)
 
