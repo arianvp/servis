@@ -14,7 +14,7 @@ data PathPart : u -> Type where
   Const : String -> PathPart u
   ||| A route segment.    like  /users/:userid.
   ||| Captures data from a route.
-  ||| 
+  |||
   ||| @ name  the name of the capture. Purely for documentation purposes
   ||| @ typ   the type of the capture. Can be any type in `u`
   Segment : (name : String) -> (typ:u) -> PathPart u
@@ -59,7 +59,7 @@ ApiUniverse u => ApiUniverse (Handler u) where
   el (Header s header handler) =
     el header -> el handler
   el (Outputs output) = el output
-  
+
 data Api : u -> Type where
   Endpoint : Handler u -> Api u
   -- TODO nonempty
@@ -75,3 +75,16 @@ ApiUniverse u => ApiUniverse (Api u) where
   el (pathPart :> api) = el pathPart -> el api
 
 
+||| Allows parsing HTTP requests given an API description
+interface ApiUniverse u => Parse u where
+  ||| @ v     the API description
+  ||| @ input the text to parse
+  parse : (v : u) -> (input : String) -> Maybe (el v)
+
+Parse ExampleUniv where
+  parse NAT = Just . cast
+
+Parse u => Parse (PathPart u) where
+  parse (Segment str type) = parse type
+  parse (Const str) = const Nothing
+  parse (Wildcard) = const Nothing
