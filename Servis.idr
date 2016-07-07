@@ -6,9 +6,10 @@ public export data PathPart : Type where
 
 
 public export
-PathPartType : PathPart -> Type -> Type
-PathPartType (Const s) type = type
-PathPartType (Segment s type1) type2 = type1 -> type2
+PathPartType : PathPart -> Maybe Type
+PathPartType (Const s) = Nothing
+PathPartType (Segment s type) = Just type
+
 
 
 -- TODO: Currently we assume request body is json or whatever.
@@ -49,7 +50,10 @@ path path api = foldr (:>) api . map Const . split (== '/') $ path
 
 public export
 ApiType : Api -> Type
-ApiType (path :> api) = PathPartType path (ApiType api)
+ApiType (path :> api) =
+  case PathPartType path of
+    Just typ =>  typ -> ApiType api
+    Nothing => ApiType api
 ApiType (Endpoint x) =  MethodType x
 ApiType (api1 :<|> api2) = (ApiType api1, ApiType api2)
 
