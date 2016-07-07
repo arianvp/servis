@@ -75,14 +75,3 @@ ApiUniverse u => ApiUniverse (Api u) where
   el (pathPart :> api) = el pathPart -> el api
 
 
-data ApiUniv
-  = USER
-  | INT
-  | STRING
-
-data User = MkUser String String
-
-ApiUniverse ApiUniv where
-  el USER = User
-  el INT = Int
-  el STRING = String
