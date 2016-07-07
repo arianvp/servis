@@ -1,61 +1,88 @@
-module Servis
+module Servis3
+%access public export
+||| An interface for defining universes of types that can be used in an API
+||| @ u the universe to be defined
+interface ApiUniverse u where
+  ||| Decides to what types we should project elements of `u`
+  el : u -> Type
 
-public export data PathPart : Type where
-  Const : String -> PathPart
-  Segment : String -> Type -> PathPart
+||| Describes a part of an ApiUniverseRI path
+|||
+||| @ u the universe which we work in
+data PathPart : u -> Type where
+  ||| Dummy for routing.
+  Const : String -> PathPart u
+  ||| A route segment.    like  /users/:userid.
+  ||| Captures data from a route.
+  ||| 
+  ||| @ name  the name of the capture. Purely for documentation purposes
+  ||| @ typ   the type of the capture. Can be any type in `u`
+  Segment : (name : String) -> (typ:u) -> PathPart u
+  Wildcard : PathPart u
+
+ApiUniverse u => ApiUniverse (PathPart u) where
+  el (Const str) = ()
+  el (Segment str u) = el u
+  el Wildcard = ()
+
+||| Describes outputs of endpoints
+|||
+||| @ u the universe which we work in
+data Output : u -> Type where
+  ||| A HTTP GET.
+  |||
+  ||| @ response  the response type of the GET
+  GET : (response : u) -> Output u
+  ||| A HTTP POST
+  |||
+  ||| @ request   the request body type of a POST
+  ||| @ response  the response body type of a POST
+  POST : (request : u) -> (response : u) -> Output u
+
+ApiUniverse u => ApiUniverse (Output u) where
+  el (GET response) = el response
+  el (POST request response) = el request -> el response
+
+||| Describes an HTTP Handler
+data Handler : u -> Type where
+  ||| Handling of a QueryParam. Allows us to capture query params
+  |||
+  ||| @ paramName   The name of the query param to be captured
+  ||| @ type        The type of the query param to be captured
+  QueryParam : (paramName : String) -> (type : u) -> Handler u -> Handler u
+  Header : String -> (header: u) -> Handler u -> Handler u
+  Outputs : Output u -> Handler u
+
+ApiUniverse u => ApiUniverse (Handler u) where
+  el (QueryParam s queryParam handler) =
+    el queryParam -> el handler
+  el (Header s header handler) =
+    el header -> el handler
+  el (Outputs output) = el output
+  
+data Api : u -> Type where
+  Endpoint : Handler u -> Api u
+  -- TODO nonempty
+  OneOf : List (Api u) -> Api u
+  (:>) : PathPart u -> Api u ->  Api u
+
+infixr 5 :>
+
+ApiUniverse u => ApiUniverse (Api u) where
+  el (Endpoint handler) = el handler
+  el (OneOf []) = ()
+  el (OneOf (x::xs)) = (el x , el (OneOf xs))
+  el (pathPart :> api) = el pathPart -> el api
 
 
-public export
-PathPartType : PathPart -> Maybe Type
-PathPartType (Const s) = Nothing
-PathPartType (Segment s type) = Just type
+data ApiUniv
+  = USER
+  | INT
+  | STRING
 
+data User = MkUser String String
 
-
--- TODO: Currently we assume request body is json or whatever.
--- and so is response. we dont really do any Content-Type stuff yet
-
-
-public export data Method : Type where
-
-  -- | A GET
-  GET  : (response : Type) -> Method
-
-  -- | Handle a post with an optional body
-  POST : (requestBody : Type) -> (response : Type) -> Method
-
-  -- | Capture any query parameters
-  QueryParam : (paramName : String) -> (queryParam : Type) -> (sub : Method) -> Method
-
-public export
-MethodType : Method  -> Type
-MethodType (GET response) =  IO response
-MethodType (POST requestBody response)  = requestBody -> IO response
-MethodType (QueryParam paramName queryParam sub)  = queryParam -> MethodType sub
-
-
-public export data Api : Type where
-  Endpoint : Method -> Api
-  -- OneOf    : List Api -> Api  TODO implement
-  (:>)     : PathPart -> Api -> Api
-
-  (:<|>) : Api -> Api -> Api
-
-infixr 9 :>
-infixr 8 :<|>
-
-public export
-path : String -> Api -> Api
-path path api = foldr (:>) api . map Const . split (== '/') $ path
-
-public export
-ApiType : Api -> Type
-ApiType (path :> api) =
-  case PathPartType path of
-    Just typ =>  typ -> ApiType api
-    Nothing => ApiType api
-ApiType (Endpoint x) =  MethodType x
-ApiType (api1 :<|> api2) = (ApiType api1, ApiType api2)
-
-
--- Tussen 10 en 12 en 2 tot 4
+ApiUniverse ApiUniv where
+  el USER = User
+  el INT = Int
+  el STRING = String
