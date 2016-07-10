@@ -1,5 +1,9 @@
 module Servis3
+
+import HTTP.URL
+
 %access public export
+
 ||| An interface for defining universes of types that can be used in an API
 ||| @ u the universe to be defined
 interface ApiUniverse u where
@@ -60,6 +64,7 @@ Eq u => Eq (Output u) where
     response1 == response2
   (POST request1 response1) == (POST request2 response2) =
     request1 == request2 && response1 == response2
+  _ == _ = False
 
 ||| Describes an HTTP Handler
 data Handler : u -> Type where
@@ -81,6 +86,11 @@ ApiUniverse u => ApiUniverse (Handler u) where
 Eq u => Eq (Handler u) where
   (QueryParam paramName1 type1 handler1) == (QueryParam paramName2 type2 handler2) =
     paramName1 == paramName2 && type1 == type2 && handler1 == handler2
+  (Header s1 header1 handler1) == (Header s2 header2 handler2) =
+    s1 == s2 && header1 == header2 && handler1 == handler2
+  (Outputs output1) == (Outputs output2) =
+      output1 == output2
+  _ == _ = False
 
 data Api : u -> Type where
   Endpoint : Handler u -> Api u
@@ -102,15 +112,15 @@ Eq u => Eq (Api u) where
   (OneOf xs) == (OneOf ys) = xs == ys
   (pathPart1 :> api1) == (pathPart2 :> api2) =
     pathPart1 == pathPart2 && api1 == api2
+  _ == _ = False
+
 interface ApiUniverse u => Parse u where
-  ||| @ v     the API description
-  ||| @ input the text to parse
-  parse : (v : u) -> (input : String) -> Maybe (el v)
+  parse : (v : u) -> String -> Maybe (el v)
 
-Parse ExampleUniv where
-  parse NAT = Just . cast
 
-Parse u => Parse (PathPart u) where
-  parse (Segment str type) = parse type
-  parse (Const str) = const Nothing
-  parse (Wildcard) = const Nothing
+route : ApiUniverse u
+      => (api : Api u)
+      -> (handlers : el api)
+      -> (url : URL)
+      -> (requestBody : Maybe String)
+      -> Maybe (IO String)
