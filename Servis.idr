@@ -44,19 +44,29 @@ implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) wh
       Nothing => Nothing
       Just body => Just (map (toResponse responseType) (handler (fromRequest requestType body)))
 
+data PathPart : capture -> query -> Type where
+  Const : (path : String) -> PathPart capture query
+  Capture : (name : String) -> (type : capture) -> PathPart capture query
+  QueryParam : (name : String) -> (type : query) -> PathPart capture query
 
-data Path : capture -> query -> Type where
-  Const : (path : String) -> Path capture query
-  Capture : (name : String) -> (type : capture) -> Path capture query
-  QueryParam : (name : String) -> (type : query) -> Path capture query
-  (:>) : (left : Path capture query) -> (right : Path capture query) -> Path capture query
+data Path : capture -> query -> req -> resp -> Type where
+  (:>) : (left : PathPart capture query) -> (right : Path capture query req resp) -> Path capture query req resp
+  Handle : Handler req resp -> Path capture query req resp
 
-data Router : capture -> query -> req -> resp -> Type where
-  Routes : Path capture query -> Handler req resp -> Router capture  query req resp
+infixr 5 :>
+implementation ( Universe capture
+               , Universe query
+               , Universe req
+               , Universe resp) => Universe (Path capture query req resp) where
+  el (Const path :> right) = el right
+  el (Capture name type :> right) = el type -> el right
+  el (QueryParam name type :> right) = el type -> el right
+  el (Handle handler) = el handler
+
 
 data Api : capture -> query -> req -> resp -> Type where
   -- OneOf : Eq u => (routers : List (Router u)) -> {auto ok : NonEmpty routers} -> {auto ok: paths (routers) = nub (paths routers)} -> Api u
-  OneOf : (routers : List (Router capture query req resp)) -> {auto ok : NonEmpty routers} -> Api capture query req resp
+  OneOf : (paths : List (Path capture query req resp)) -> {auto ok : NonEmpty paths} -> Api capture query req resp
 
 interface Universe u => Parse u where
   parse : (v : u) -> String -> Maybe (el v)
