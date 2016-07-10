@@ -1,4 +1,4 @@
-module Servis3
+module Servis
 
 import HTTP.URL
 
@@ -49,11 +49,23 @@ data PathPart : capture -> query -> Type where
   Capture : (name : String) -> (type : capture) -> PathPart capture query
   QueryParam : (name : String) -> (type : query) -> PathPart capture query
 
+implementation (Eq capture, Eq query) => Eq (PathPart capture query) where
+  (Const a) == (Const b) = a == b
+  (Capture _ type1) == (Capture _ type2) = type1 == type2
+  (QueryParam _ type1) == (QueryParam _ type2) = type2 == type2
+  _ == _ =  False
+
 data Path : capture -> query -> req -> resp -> Type where
   (:>) : (left : PathPart capture query) -> (right : Path capture query req resp) -> Path capture query req resp
   Handle : Handler req resp -> Path capture query req resp
-
 infixr 5 :>
+
+
+extractPathInfo : Path capture query req resp -> List (PathPart capture query)
+extractPathInfo (Handle x) = []
+extractPathInfo (left :> right) = left :: extractPathInfo right
+
+
 implementation ( Universe capture
                , Universe query
                , Universe req
@@ -63,10 +75,17 @@ implementation ( Universe capture
   el (QueryParam name type :> right) = el type -> el right
   el (Handle handler) = el handler
 
-
+||| Super cool
 data Api : capture -> query -> req -> resp -> Type where
-  -- OneOf : Eq u => (routers : List (Router u)) -> {auto ok : NonEmpty routers} -> {auto ok: paths (routers) = nub (paths routers)} -> Api u
-  OneOf : (paths : List (Path capture query req resp)) -> {auto ok : NonEmpty paths} -> Api capture query req resp
+  |||
+  ||| @ paths  a list of paths we can choose from
+  ||| @ thereShouldBePaths  A proof that we have at least one path defined
+  ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
+  OneOf : (Eq capture, Eq query)
+        => (paths : List (Path capture query req resp))
+       -> {auto thereShouldBePaths: NonEmpty paths}
+       -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
+       -> Api capture query req resp
 
 interface Universe u => Parse u where
   parse : (v : u) -> String -> Maybe (el v)
