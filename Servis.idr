@@ -35,7 +35,6 @@ implementation (Universe req, Universe resp) => Universe (Handler req resp) wher
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
 
-
 implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) where
   route (GET responseType) handler url requestBody =
     Just (map (toResponse responseType) handler)
@@ -61,11 +60,6 @@ data Path : capture -> query -> req -> resp -> Type where
 infixr 5 :>
 
 
-extractPathInfo : Path capture query req resp -> List (PathPart capture query)
-extractPathInfo (Handle x) = []
-extractPathInfo (left :> right) = left :: extractPathInfo right
-
-
 implementation ( Universe capture
                , Universe query
                , Universe req
@@ -74,6 +68,23 @@ implementation ( Universe capture
   el (Capture name type :> right) = el type -> el right
   el (QueryParam name type :> right) = el type -> el right
   el (Handle handler) = el handler
+
+implementation ( FromCapture capture
+               , FromQueryParam query
+               , FromRequest req
+               , ToResponse resp
+               ) => Route (Path capture query req resp) where
+  route ((Const path) :> right) handler url requestBody =
+    -- TODO: Check if path in url. pop url
+    --
+    ?d_3
+  route ((Capture name type) :> right) handler url requestBody = ?d_4
+  route ((QueryParam name type) :> right) handler url requestBody = ?d_5
+  route (Handle x) handler url requestBody = ?d_2
+
+extractPathInfo : Path capture query req resp -> List (PathPart capture query)
+extractPathInfo (Handle x) = []
+extractPathInfo (left :> right) = left :: extractPathInfo right
 
 ||| Super cool
 data Api : capture -> query -> req -> resp -> Type where
