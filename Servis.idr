@@ -15,30 +15,26 @@ interface ApiUniverse u where
 ||| @ u the universe which we work in
 data PathPart : u -> Type where
   ||| Dummy for routing.
-  Const : String -> PathPart u
+  Const : (path : String) -> PathPart u
   ||| A route segment.    like  /users/:userid.
   ||| Captures data from a route.
   |||
   ||| @ name  the name of the capture. Purely for documentation purposes
-  ||| @ typ   the type of the capture. Can be any type in `u`
-  Segment : (name : String) -> (typ:u) -> PathPart u
+  ||| @ type  the type of the capture. Can be any type in `u`
+  Segment : (name : String) -> (type : u) -> PathPart u
   Wildcard : PathPart u
 
-
-|||
 ApiUniverse u => ApiUniverse (PathPart u) where
-  el (Const str) = ()
-  el (Segment str u) = el u
+  el (Const path) = ()
+  el (Segment name type) = el type
   el Wildcard = ()
 
-||| Structural equality instance
 Eq u => Eq (PathPart u) where
-  (Const str1) == (Const str2) = str1 == str2
-  (Segment name1 typ1) == (Segment name2 typ2) =
-    name1 == name2 && typ1 == typ2
+  (Const path1) == (Const path2) = path1 == path2
+  (Segment name1 type1) == (Segment name2 type2) =
+    name1 == name2 && type1 == type2
   Wildcard == Wildcard = True
   _ == _ = False
-
 
 
 ||| Describes outputs of endpoints
@@ -47,47 +43,44 @@ Eq u => Eq (PathPart u) where
 data Output : u -> Type where
   ||| A HTTP GET.
   |||
-  ||| @ response  the response type of the GET
-  GET : (response : u) -> Output u
+  ||| @ responseType:  the response type of the GET
+  GET : (responseType : u) -> Output u
   ||| A HTTP POST
   |||
-  ||| @ request   the request body type of a POST
-  ||| @ response  the response body type of a POST
-  POST : (request : u) -> (response : u) -> Output u
+  ||| @ requestType   the request body type of a POST
+  ||| @ responseType  the response body type of a POST
+  POST : (requestType : u) -> (responseType : u) -> Output u
 
 ApiUniverse u => ApiUniverse (Output u) where
-  el (GET response) = el response -> IO ()
-  el (POST request response) = el request -> el response -> IO ()
+  el (GET responseType) = el responseType -> IO ()
+  el (POST requestType responseType) = el requestType -> el responseType -> IO ()
 
 Eq u => Eq (Output u) where
-  (GET response1) == (GET response2) =
-    response1 == response2
-  (POST request1 response1) == (POST request2 response2) =
-    request1 == request2 && response1 == response2
+  (GET responseType1) == (GET responseType2) =
+    responseType1 == responseType2
+  (POST requestType1 responseType1) == (POST requestType2 responseType2) =
+    requestType1 == requestType2 && responseType1 == responseType2
   _ == _ = False
 
 ||| Describes an HTTP Handler
 data Handler : u -> Type where
   ||| Handling of a QueryParam. Allows us to capture query params
   |||
-  ||| @ paramName   The name of the query param to be captured
-  ||| @ type        The type of the query param to be captured
-  QueryParam : (paramName : String) -> (type : u) -> Handler u -> Handler u
-  Header : String -> (header: u) -> Handler u -> Handler u
-  Outputs : Output u -> Handler u
+  ||| @ name  The name of the query param to be captured
+  ||| @ type  The type of the query param to be captured
+  QueryParam : (name : String) -> (type : u) -> (handler : Handler u) -> Handler u
+  ||| A Handler outputs something
+  ||| @ output  the output of the handler
+  Outputs : (output : Output u) -> Handler u
 
 ApiUniverse u => ApiUniverse (Handler u) where
-  el (QueryParam s queryParam handler) =
-    el queryParam -> el handler
-  el (Header s header handler) =
-    el header -> el handler
+  el (QueryParam name type handler) =
+    el type -> el handler
   el (Outputs output) = el output
 
 Eq u => Eq (Handler u) where
-  (QueryParam paramName1 type1 handler1) == (QueryParam paramName2 type2 handler2) =
-    paramName1 == paramName2 && type1 == type2 && handler1 == handler2
-  (Header s1 header1 handler1) == (Header s2 header2 handler2) =
-    s1 == s2 && header1 == header2 && handler1 == handler2
+  (QueryParam name1 type1 handler1) == (QueryParam name2 type2 handler2) =
+    name1 == name2 && type1 == type2 && handler1 == handler2
   (Outputs output1) == (Outputs output2) =
       output1 == output2
   _ == _ = False
@@ -117,10 +110,9 @@ Eq u => Eq (Api u) where
 interface ApiUniverse u => Parse u where
   parse : (v : u) -> String -> Maybe (el v)
 
-
 route : ApiUniverse u
       => (api : Api u)
       -> (handlers : el api)
       -> (url : URL)
       -> (requestBody : Maybe String)
-      -> Maybe (IO String)
+      -> IO ()
