@@ -20,10 +20,22 @@ data PathPart : u -> Type where
   Segment : (name : String) -> (typ:u) -> PathPart u
   Wildcard : PathPart u
 
+
+|||
 ApiUniverse u => ApiUniverse (PathPart u) where
   el (Const str) = ()
   el (Segment str u) = el u
   el Wildcard = ()
+
+||| Structural equality instance
+Eq u => Eq (PathPart u) where
+  (Const str1) == (Const str2) = str1 == str2
+  (Segment name1 typ1) == (Segment name2 typ2) =
+    name1 == name2 && typ1 == typ2
+  Wildcard == Wildcard = True
+  _ == _ = False
+
+
 
 ||| Describes outputs of endpoints
 |||
@@ -40,8 +52,14 @@ data Output : u -> Type where
   POST : (request : u) -> (response : u) -> Output u
 
 ApiUniverse u => ApiUniverse (Output u) where
-  el (GET response) = el response
-  el (POST request response) = el request -> el response
+  el (GET response) = el response -> IO ()
+  el (POST request response) = el request -> el response -> IO ()
+
+Eq u => Eq (Output u) where
+  (GET response1) == (GET response2) =
+    response1 == response2
+  (POST request1 response1) == (POST request2 response2) =
+    request1 == request2 && response1 == response2
 
 ||| Describes an HTTP Handler
 data Handler : u -> Type where
@@ -60,6 +78,10 @@ ApiUniverse u => ApiUniverse (Handler u) where
     el header -> el handler
   el (Outputs output) = el output
 
+Eq u => Eq (Handler u) where
+  (QueryParam paramName1 type1 handler1) == (QueryParam paramName2 type2 handler2) =
+    paramName1 == paramName2 && type1 == type2 && handler1 == handler2
+
 data Api : u -> Type where
   Endpoint : Handler u -> Api u
   -- TODO nonempty
@@ -74,8 +96,12 @@ ApiUniverse u => ApiUniverse (Api u) where
   el (OneOf (x::xs)) = (el x , el (OneOf xs))
   el (pathPart :> api) = el pathPart -> el api
 
-
-||| Allows parsing HTTP requests given an API description
+Eq u => Eq (Api u) where
+  (Endpoint handler1) == (Endpoint handler2) =
+    handler1 == handler2
+  (OneOf xs) == (OneOf ys) = xs == ys
+  (pathPart1 :> api1) == (pathPart2 :> api2) =
+    pathPart1 == pathPart2 && api1 == api2
 interface ApiUniverse u => Parse u where
   ||| @ v     the API description
   ||| @ input the text to parse
