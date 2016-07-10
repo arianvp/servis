@@ -86,6 +86,3 @@ data Api : capture -> query -> req -> resp -> Type where
        -> {auto thereShouldBePaths: NonEmpty paths}
        -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
        -> Api capture query req resp
-
-interface Universe u => Parse u where
-  parse : (v : u) -> String -> Maybe (el v)
