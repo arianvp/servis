@@ -56,18 +56,19 @@ implementation (Eq capture, Eq query) => Eq (PathPart capture query) where
 
 data Path : capture -> query -> req -> resp -> Type where
   (:>) : (left : PathPart capture query) -> (right : Path capture query req resp) -> Path capture query req resp
-  Handle : Handler req resp -> Path capture query req resp
+  Outputs : Handler req resp -> Path capture query req resp
 infixr 5 :>
 
 
 implementation ( Universe capture
                , Universe query
                , Universe req
-               , Universe resp) => Universe (Path capture query req resp) where
+               , Universe resp
+               ) => Universe (Path capture query req resp) where
   el (Const path :> right) = el right
   el (Capture name type :> right) = el type -> el right
   el (QueryParam name type :> right) = el type -> el right
-  el (Handle handler) = el handler
+  el (Outputs handler) = el handler
 
 implementation ( FromCapture capture
                , FromQueryParam query
@@ -75,12 +76,22 @@ implementation ( FromCapture capture
                , ToResponse resp
                ) => Route (Path capture query req resp) where
   route ((Const path) :> right) handler url requestBody =
-    -- TODO: Check if path in url. pop url
-    --
+    --  Check if path in url. pop url
+    --  Do nothing. because const carries no information
+    -- recurse on `right`
     ?d_3
-  route ((Capture name type) :> right) handler url requestBody = ?d_4
-  route ((QueryParam name type) :> right) handler url requestBody = ?d_5
-  route (Handle x) handler url requestBody = ?d_2
+  route ((Capture name type) :> right) handler url requestBody =
+    --  Parse capture from url, pop url.
+    -- partially apply  handler with parsed result
+    -- recurse on  `right` with popped url and new handler
+    ?d_4
+  route ((QueryParam name type) :> right) handler url requestBody =
+    -- Get query param from url, pop query param
+    -- partially apply handler with parsed query param
+    -- recurse on `right` with popped query handler and new partially applied handler
+    ?d_5
+
+  route (Outputs x) handler url requestBody = route x handler url requestBody
 
 extractPathInfo : Path capture query req resp -> List (PathPart capture query)
 extractPathInfo (Handle x) = []
@@ -97,3 +108,7 @@ data Api : capture -> query -> req -> resp -> Type where
        -> {auto thereShouldBePaths: NonEmpty paths}
        -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
        -> Api capture query req resp
+
+-- PSEUDO CODE:
+implementation Route Api where
+  route = ?d -- keep trying a route in paths until one does not return Nothing
