@@ -11,13 +11,13 @@ interface Universe u where
   el : u -> Type
 
 interface Universe u => FromQueryParam u where
-  fromQueryParam : (v : u) -> String -> el v
+  fromQueryParam : (v : u) -> String -> Maybe (el v)
 
 interface Universe u => FromCapture u where
-  fromCapture : (v : u) -> String -> el v
+  fromCapture : (v : u) -> String -> Maybe (el v)
 
 interface Universe u => FromRequest u where
-  fromRequest : (v : u) -> String -> el v
+  fromRequest : (v : u) -> String -> Maybe (el v)
 
 interface Universe u => ToResponse u where
   toResponse : (v : u) -> el v -> String
@@ -37,11 +37,11 @@ implementation (Universe req, Universe resp) => Universe (Handler req resp) wher
 
 implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) where
   route (GET responseType) handler url requestBody =
-    Just (map (toResponse responseType) handler)
-  route (POST requestType responseType) handler url requestBody =
-    case requestBody of
-      Nothing => Nothing
-      Just body => Just (map (toResponse responseType) (handler (fromRequest requestType body)))
+    pure (map (toResponse responseType) handler)
+  route (POST requestType responseType) handler url requestBody = do
+    body <- requestBody
+    request <- fromRequest requestType body
+    pure (map (toResponse responseType) (handler request))
 
 data PathPart : capture -> query -> Type where
   Const : (path : String) -> PathPart capture query
@@ -81,19 +81,18 @@ implementation ( FromCapture capture
     -- recurse on `right`
     case pathParts of
       [] => Nothing
-      (x::xs) =>
-        if x == path
-          then route right handler (MkURL xs params) requestBody
-          else Nothing
-
+      (x::xs) => do
+        guard (x == path)
+        route right handler (MkURL xs params) requestBody
   route ((Capture name type) :> right) handler (MkURL pathParts params) requestBody =
     --  Parse capture from url, pop url.
     -- partially apply  handler with parsed result
     -- recurse on  `right` with popped url and new handler
     case pathParts of
       [] => Nothing
-      (x::xs) =>
-        route right (handler (fromCapture type x)) (MkURL xs params) requestBody
+      (x::xs) => do
+        capture <- fromCapture type x
+        route right (handler capture) (MkURL xs params) requestBody
 
   route ((QueryParam name type) :> right) handler (MkURL pathParts params) requestBody =
     -- Get query param from url, pop query param
@@ -101,10 +100,10 @@ implementation ( FromCapture capture
     -- recurse on `right` with popped query handler and new partially applied handler
     case params of
       [] => Nothing
-      ((name', val) :: xs) =>
-        if name == name'
-          then route right (handler (fromQueryParam type val)) (MkURL pathParts xs) requestBody
-          else Nothing
+      ((name', val) :: xs) => do
+        guard (name == name')
+        param <- fromQueryParam type val
+        route right (handler param) (MkURL pathParts xs) requestBody
 
   route (Outputs x) handler url requestBody = route x handler url requestBody
 
