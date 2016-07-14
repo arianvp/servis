@@ -75,40 +75,51 @@ implementation ( FromCapture capture
                , FromRequest req
                , ToResponse resp
                ) => Route (Path capture query req resp) where
-  route ((Const path) :> right) handler url requestBody =
+  route ((Const path) :> right) handler (MkURL pathParts params) requestBody =
     --  Check if path in url. pop url
     --  Do nothing. because const carries no information
     -- recurse on `right`
-    ?d_3
-  route ((Capture name type) :> right) handler url requestBody =
+    case pathParts of
+      [] => Nothing
+      (x::xs) =>
+        if x == path
+          then route right handler (MkURL xs params) requestBody
+          else Nothing
+
+  route ((Capture name type) :> right) handler (MkURL pathParts params) requestBody =
     --  Parse capture from url, pop url.
     -- partially apply  handler with parsed result
     -- recurse on  `right` with popped url and new handler
-    ?d_4
-  route ((QueryParam name type) :> right) handler url requestBody =
+    case pathParts of
+      [] => Nothing
+      (x::xs) =>
+        route right (handler (fromCapture type x)) (MkURL xs params) requestBody
+
+  route ((QueryParam name type) :> right) handler (MkURL pathParts params) requestBody =
     -- Get query param from url, pop query param
     -- partially apply handler with parsed query param
     -- recurse on `right` with popped query handler and new partially applied handler
-    ?d_5
+    case params of
+      [] => Nothing
+      ((name', val) :: xs) =>
+        if name == name'
+          then route right (handler (fromQueryParam type val)) (MkURL pathParts xs) requestBody
+          else Nothing
 
   route (Outputs x) handler url requestBody = route x handler url requestBody
 
-extractPathInfo : Path capture query req resp -> List (PathPart capture query)
-extractPathInfo (Handle x) = []
-extractPathInfo (left :> right) = left :: extractPathInfo right
+--extractPathInfo : Path capture query req resp -> List (PathPart capture query)
+--extractPathInfo (Handle x) = []
+--extractPathInfo (left :> right) = left :: extractPathInfo right
 
 ||| Super cool
 data Api : capture -> query -> req -> resp -> Type where
   |||
   ||| @ paths  a list of paths we can choose from
   ||| @ thereShouldBePaths  A proof that we have at least one path defined
-  ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
+  -- ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
   OneOf : (Eq capture, Eq query)
         => (paths : List (Path capture query req resp))
        -> {auto thereShouldBePaths: NonEmpty paths}
-       -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
+       -- -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
        -> Api capture query req resp
-
--- PSEUDO CODE:
-implementation Route Api where
-  route = ?d -- keep trying a route in paths until one does not return Nothing
