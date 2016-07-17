@@ -1,63 +1,54 @@
 module Example
 import Servis
+import Data.Vect
+import Data.HVect
 
--- universe of queryparams
-data QueryParamU = QINT | QSTRING
 
 -- universe of path captures
 data CaptureU = CINT | CSTRING
+
+implementation Universe CaptureU where
+  el CINT = Int
+  el CSTRING = String
+
+-- universe of queryparams
+data QueryU = QINT | QSTRING
+
+implementation Universe QueryU where
+  el QINT = Int
+  el QSTRING = String
+
+data NoU
+
+implementation Universe NoU where
+  el _ = ()
+
 
 -- universe of response types
 data RespU = USER | LIST RespU
 
 
-ApiUniverse () where
-  el () = ()
-
 record User where
   constructor MkUser
-  userId : Int
-  username : String
+  name : String
+  id : Int
 
-ApiUniverse RespU where
-  el USER = Example.User
-  el (LIST u) = List (el u)
+implementation Universe RespU where
+  el USER = User
+  el (LIST x) = List (el x)
 
-ToResponse RespU where
-  toResponse USER v =  ("MkUser " ++ username v ++ " " ++  (the String (cast (userId v))))
-  toResponse (LIST u) v = (?renderAList)
 
-ApiUniverse QueryParamU where
-  el QINT = Int
-  el QSTIRNG = String
-
-FromQueryParam QueryParamU where
-  fromQueryParam QINT str = ?d
-  fromQueryParam QSTRING str = str
-
-FromCapture CaptureU where
-  fromCapture CINT str = ?d
-  fromCapture CSTRING str = str
-
-UserApi : Api CaptureU QueryU () RespU
+UserApi : Api CaptureU QueryU NoU RespU
 UserApi = OneOf
-  [ Const "user" :> Segment "userId" INT :> Outputs (GET USER)
-  , Const "user" :> QueryParam "limit" INT :> Outputs (GET (LIST USER))
+  [ Const "user" :> Capture "userId" CINT :> Outputs (GET USER)
+  , Const "user" :> QueryParam "limit" QINT :> Outputs (GET (LIST USER))
   ]
 
+getUserById: Int -> IO User
+getUserById x = return (MkUser "hey" 0)
 
--- very cool: this is a type error:
-{-
-OneOf
-  [ Const "user" :> Segment "userId" Int :> blah
-  , Const "user" :> Segment "blahId" String :> blah
-  ]
-
-because of the noOverlappingPaths constraint!!! :D
--}
-
-
-
-
+getUsersLimit : Int -> IO (List User)
+getUsersLimit x = return ([MkUser "hey" 0])
 
 userApi : el UserApi
+userApi = [getUserById, getUsersLimit]
