@@ -116,10 +116,8 @@ implementation ( FromCapture capture
 data Api : capture -> query -> req -> resp -> Type where
   |||
   ||| @ paths  a list of paths we can choose from
- --  ||| @ thereShouldBePaths  A proof that we have at least one path defined
   -- ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
-  OneOf : {auto thereShouldBePaths: n `GTE` 0} ->
-          (paths : Vect n (Path capture query req resp)) ->
+  OneOf : (paths : Vect (S n) (Path capture query req resp)) ->
           Api capture query req resp
 
 
@@ -128,5 +126,22 @@ implementation ( Universe capture
                , Universe req
                , Universe resp
                ) => Universe (Api capture query req resp) where
-
  el (OneOf xs) = HVect (map el xs)
+
+implementation (FromCapture capture
+              , FromQueryParam query
+              , FromRequest req
+              , ToResponse resp) =>
+  Route (Api capture query req resp) where
+  route (OneOf (path :: [])) (handler :: []) url requestBody =
+    -- if no handlers are left but this one. We should allow it to fail
+    route path handler url requestBody
+  route (OneOf (path :: x :: xs)) (handler :: h :: handlers) url requestBody =
+    -- if other handlers are present. Try the handler and otherwise try others
+    case route path handler url requestBody of
+      Nothing =>
+        route (OneOf (x :: xs))
+              (the (HVect _ ) (h :: handlers))  -- Note this is to help the compiler
+              url
+              requestBody
+      a => a
