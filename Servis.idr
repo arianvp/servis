@@ -1,6 +1,8 @@
 module Servis
 
 import HTTP.URL
+import Data.Vect
+import Data.HVect
 
 %access public export
 
@@ -111,14 +113,20 @@ implementation ( FromCapture capture
 --extractPathInfo (Handle x) = []
 --extractPathInfo (left :> right) = left :: extractPathInfo right
 
-||| Super cool
 data Api : capture -> query -> req -> resp -> Type where
   |||
   ||| @ paths  a list of paths we can choose from
-  ||| @ thereShouldBePaths  A proof that we have at least one path defined
+ --  ||| @ thereShouldBePaths  A proof that we have at least one path defined
   -- ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
-  OneOf : (Eq capture, Eq query)
-        => (paths : List (Path capture query req resp))
-       -> {auto thereShouldBePaths: NonEmpty paths}
-       -- -> {auto noOverlappingPaths: map Servis.extractPathInfo paths = nub (map Servis.extractPathInfo paths)}
-       -> Api capture query req resp
+  OneOf : {auto thereShouldBePaths: n `GTE` 0} ->
+          (paths : Vect n (Path capture query req resp)) ->
+          Api capture query req resp
+
+
+implementation ( Universe capture
+               , Universe query
+               , Universe req
+               , Universe resp
+               ) => Universe (Api capture query req resp) where
+
+ el (OneOf xs) = HVect (map el xs)
