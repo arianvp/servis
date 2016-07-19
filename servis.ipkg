@@ -1,6 +1,3 @@
 package servis
-opts = "-p contrib effects"
 modules = Servis
-        , HTTP.Verb
-        , HTTP.Status
         , Example

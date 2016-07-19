@@ -6,38 +6,30 @@ import Data.HVect
 
 %access public export
 
-||| An interface for defining universes of types that can be used in an API
-||| @ u the universe to be defined
-interface Universe u where
-  ||| Decides to what types we should project elements of `u`
+interface  Route u where
   el : u -> Type
+  route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 
-interface Universe u => FromQueryParam u where
+interface Route u => FromQueryParam u where
   fromQueryParam : (v : u) -> String -> Maybe (el v)
 
-interface Universe u => FromCapture u where
+interface Route u => FromCapture u where
   fromCapture : (v : u) -> String -> Maybe (el v)
 
-interface Universe u => FromRequest u where
+interface Route u => FromRequest u where
   fromRequest : (v : u) -> String -> Maybe (el v)
 
-interface Universe u => ToResponse u where
+interface Route u => ToResponse u where
   toResponse : (v : u) -> el v -> String
-
-
-interface Universe u => Route u where
-  route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 
 data Handler : req -> resp -> Type where
   GET : (responseType : resp) -> Handler req resp
   POST : (requestType : req) -> (responseType : resp) -> Handler req resp
 
 
-implementation (Universe req, Universe resp) => Universe (Handler req resp) where
+implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) where
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
-
-implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) where
   route (GET responseType) handler url requestBody =
     pure (map (toResponse responseType) handler)
   route (POST requestType responseType) handler url requestBody = do
@@ -50,33 +42,24 @@ data PathPart : capture -> query -> Type where
   Capture : (name : String) -> (type : capture) -> PathPart capture query
   QueryParam : (name : String) -> (type : query) -> PathPart capture query
 
-implementation (Eq capture, Eq query) => Eq (PathPart capture query) where
-  (Const a) == (Const b) = a == b
-  (Capture _ type1) == (Capture _ type2) = type1 == type2
-  (QueryParam _ type1) == (QueryParam _ type2) = type2 == type2
-  _ == _ =  False
-
 data Path : capture -> query -> req -> resp -> Type where
+-- (:>) : (left : PathPart capture query) -> (el left => (right : Path capture query req resp)) -> Path capture query req respA
+-- (>>) : PathPArt -> Path -> Path
+-- pp >> p = pp  :> const ps
   (:>) : (left : PathPart capture query) -> (right : Path capture query req resp) -> Path capture query req resp
   Outputs : Handler req resp -> Path capture query req resp
 infixr 5 :>
 
-
-implementation ( Universe capture
-               , Universe query
-               , Universe req
-               , Universe resp
-               ) => Universe (Path capture query req resp) where
-  el (Const path :> right) = el right
-  el (Capture name type :> right) = el type -> el right
-  el (QueryParam name type :> right) = el type -> el right
-  el (Outputs handler) = el handler
 
 implementation ( FromCapture capture
                , FromQueryParam query
                , FromRequest req
                , ToResponse resp
                ) => Route (Path capture query req resp) where
+  el (Const path :> right) =  el right
+  el (Capture name type :> right) = el type -> el right
+  el (QueryParam name type :> right) = el type -> el right
+  el (Outputs handler) = el handler
   route ((Const path) :> right) handler (MkURL pathParts params) requestBody =
     --  Check if path in url. pop url
     --  Do nothing. because const carries no information
@@ -102,6 +85,7 @@ implementation ( FromCapture capture
     -- recurse on `right` with popped query handler and new partially applied handler
     case params of
       [] => Nothing
+      -- BUG: Gotta do a lookup here
       ((name', val) :: xs) => do
         guard (name == name')
         param <- fromQueryParam type val
@@ -120,19 +104,13 @@ data Api : capture -> query -> req -> resp -> Type where
   OneOf : (paths : Vect (S n) (Path capture query req resp)) ->
           Api capture query req resp
 
-
-implementation ( Universe capture
-               , Universe query
-               , Universe req
-               , Universe resp
-               ) => Universe (Api capture query req resp) where
- el (OneOf xs) = HVect (map el xs)
-
 implementation (FromCapture capture
               , FromQueryParam query
               , FromRequest req
               , ToResponse resp) =>
   Route (Api capture query req resp) where
+  el (OneOf xs) = HVect (map el xs)
+
   route (OneOf (path :: [])) (handler :: []) url requestBody =
     -- if no handlers are left but this one. We should allow it to fail
     route path handler url requestBody
@@ -145,3 +123,18 @@ implementation (FromCapture capture
               url
               requestBody
       a => a
+
+
+
+{-data Disjoint : Path -> Path -> Type where
+  Base : Disjoint pp1 pp2 ->  Disjoint (pp1 :> p1) (pp2 :> p2)
+  Step : Disjoint p1 p2 -> Disjoint (p :> p1)  (p :> p2)
+
+data Disjoint : PP -> PP -> Type where
+  ConstDisjoint : Not (str = str') -> Disjoint (Const Str) (Const str)
+
+
+ for depedendnets:
+
+  Step : pp, p1, p2
+-}
