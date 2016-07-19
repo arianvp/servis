@@ -6,20 +6,20 @@ import Data.HVect
 
 %access public export
 
-interface  Route u where
+interface  HasServer u where
   el : u -> Type
   route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 
-interface Route u => FromQueryParam u where
+interface HasServer u => FromQueryParam u where
   fromQueryParam : (v : u) -> String -> Maybe (el v)
 
-interface Route u => FromCapture u where
+interface HasServer u => FromCapture u where
   fromCapture : (v : u) -> String -> Maybe (el v)
 
-interface Route u => FromRequest u where
+interface HasServer u => FromRequest u where
   fromRequest : (v : u) -> String -> Maybe (el v)
 
-interface Route u => ToResponse u where
+interface HasServer u => ToResponse u where
   toResponse : (v : u) -> el v -> String
 
 data Handler : req -> resp -> Type where
@@ -27,7 +27,7 @@ data Handler : req -> resp -> Type where
   POST : (requestType : req) -> (responseType : resp) -> Handler req resp
 
 
-implementation (ToResponse resp, FromRequest req) => Route (Handler req resp) where
+implementation (ToResponse resp, FromRequest req) => HasServer (Handler req resp) where
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
   route (GET responseType) handler url requestBody =
@@ -55,7 +55,7 @@ implementation ( FromCapture capture
                , FromQueryParam query
                , FromRequest req
                , ToResponse resp
-               ) => Route (Path capture query req resp) where
+               ) => HasServer (Path capture query req resp) where
   el (Const path :> right) =  el right
   el (Capture name type :> right) = el type -> el right
   el (QueryParam name type :> right) = el type -> el right
@@ -108,7 +108,7 @@ implementation (FromCapture capture
               , FromQueryParam query
               , FromRequest req
               , ToResponse resp) =>
-  Route (Api capture query req resp) where
+  HasServer (Api capture query req resp) where
   el (OneOf xs) = HVect (map el xs)
 
   route (OneOf (path :: [])) (handler :: []) url requestBody =
