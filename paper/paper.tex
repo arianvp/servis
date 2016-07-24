@@ -1,0 +1,17 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\begin{document}
+\begin{abstract}
+In this paper, we describe a DSL for web APIs named Servis. Servis is heavily inspired by Servant, a haskell type-level DSL for web APIs,  but tries to solve identified shortcomings by using a dependently typed language called Idris. Servis uses the universe pattern to deduce types from an API description such that we can verify at compile time that the implementation of the API matches the description.
+
+Furthermore, we take a look at if dependent types can bring more to the table in terms of expressiveness of API descriptions than the original Servant DSL. Specifically, we introduce $\pi$-types to describe interdependencies within an API description.
+
+
+\end{abstract}
+\end{document}
