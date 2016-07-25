@@ -1,5 +1,6 @@
 module Example
-import Servis
+import Servis.API
+import Servis.Server
 import Data.Vect
 import Data.HVect
 
