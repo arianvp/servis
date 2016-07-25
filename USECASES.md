@@ -1,3 +1,4 @@
+# Overlapping routes
 At my work (Channable) we use flask-restful to build our REST APIs.
 
 Today I was debugging a bug where certain actions on our API wouldn't come through. After a long and boring debugging sessions
@@ -37,3 +38,14 @@ TODO: example here
 
 
 In Servis, we can prove statically, that no route can overlap. If such a definition is made, a compiler error is thrown
+
+
+
+# Dependent routing
+Sometimes, we want interdependencies in our routes. An example of a very common REST query:
+
+```
+/users?limit=100
+```
+
+If would be nice if we could verif at compile time that this route never returns more than 100 elements.  In haskell, this is currently not possible, because types can not depend on values, but in idris, we _can_ accomplish this by extending the Servant DSL with Pi-types.
