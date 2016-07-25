@@ -23,9 +23,6 @@ interface Universe u => ToResponse u where
 interface Universe u => HasServer u where
   route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 
-(ToResponse resp, FromRequest req) => Universe (Handler req resp) where
-  el (GET responseType) = IO (el responseType)
-  el (POST requestType responseType) = el requestType -> IO (el responseType)
 (ToResponse resp, FromRequest req) => HasServer (Handler req resp) where
   route (GET responseType) handler url requestBody =
     pure (map (toResponse responseType) handler)
@@ -34,16 +31,6 @@ interface Universe u => HasServer u where
     request <- fromRequest requestType body
     pure (map (toResponse responseType) (handler request))
 
-
-( FromCapture capture
-, FromQueryParam query
-, FromRequest req
-, ToResponse resp
-) => Universe (Path capture query req resp) where
-  el (Const path :> right) =  el right
-  el (Capture name type :> right) = el type -> el right
-  el (QueryParam name type :> right) = el type -> el right
-  el (Outputs handler) = el handler
 
 ( FromCapture capture
 , FromQueryParam query
