@@ -1,4 +1,6 @@
 package servis
 sourcedir = src
-modules = Servis
-        , Example
+modules = Example
+        , HTTP.URL
+        , Servis.API
+        , Servis.Server

@@ -1,4 +1,5 @@
 module HTTP.URL
+
 %access public export
 
 record URL where

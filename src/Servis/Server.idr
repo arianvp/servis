@@ -93,7 +93,6 @@ interface Universe u => HasServer u where
 , FromRequest req
 , ToResponse resp) =>
   HasServer (API capture query req resp) where
-  el (OneOf xs) = HVect (map el xs)
 
   route (OneOf (path :: [])) (handler :: []) url requestBody =
     -- if no handlers are left but this one. We should allow it to fail
