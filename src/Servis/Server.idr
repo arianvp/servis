@@ -56,17 +56,14 @@ interface Universe u => HasServer u where
         capture <- fromCapture type x
         route right (handler capture) (MkURL xs params) requestBody
 
-  route ((QueryParam name type) :> right) handler (MkURL pathParts params) requestBody =
+  route ((QueryParam name type) :> right) handler (MkURL pathParts params) requestBody = do
     -- Get query param from url, pop query param
     -- partially apply handler with parsed query param
     -- recurse on `right` with popped query handler and new partially applied handler
-    case params of
-      [] => Nothing
-      -- BUG: Gotta do a lookup here
-      ((name', val) :: xs) => do
-        guard (name == name')
-        param <- fromQueryParam type val
-        route right (handler param) (MkURL pathParts xs) requestBody
+    val <- lookup name params
+    param <- fromQueryParam type val
+    let newParams = dropWhile ((== name) . fst) params
+    route right (handler param) (MkURL pathParts newParams) requestBody
 
   route (Outputs x) handler url requestBody = route x handler url requestBody
 
