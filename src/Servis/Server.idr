@@ -1,35 +1,32 @@
-module Servis
+module Servis.Server
 
 import HTTP.URL
+import Servis.API
 import Data.Vect
 import Data.HVect
 
+%default total
 %access public export
 
-interface  HasServer u where
-  el : u -> Type
-  route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
-
-interface HasServer u => FromQueryParam u where
+interface Universe u => FromQueryParam u where
   fromQueryParam : (v : u) -> String -> Maybe (el v)
 
-interface HasServer u => FromCapture u where
+interface Universe u => FromCapture u where
   fromCapture : (v : u) -> String -> Maybe (el v)
 
-interface HasServer u => FromRequest u where
+interface Universe u => FromRequest u where
   fromRequest : (v : u) -> String -> Maybe (el v)
 
-interface HasServer u => ToResponse u where
+interface Universe u => ToResponse u where
   toResponse : (v : u) -> el v -> String
 
-data Handler : req -> resp -> Type where
-  GET : (responseType : resp) -> Handler req resp
-  POST : (requestType : req) -> (responseType : resp) -> Handler req resp
+interface Universe u => HasServer u where
+  route : (v : u) -> (handler : el v) -> (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 
-
-implementation (ToResponse resp, FromRequest req) => HasServer (Handler req resp) where
+(ToResponse resp, FromRequest req) => Universe (Handler req resp) where
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
+(ToResponse resp, FromRequest req) => HasServer (Handler req resp) where
   route (GET responseType) handler url requestBody =
     pure (map (toResponse responseType) handler)
   route (POST requestType responseType) handler url requestBody = do
@@ -37,29 +34,22 @@ implementation (ToResponse resp, FromRequest req) => HasServer (Handler req resp
     request <- fromRequest requestType body
     pure (map (toResponse responseType) (handler request))
 
-data PathPart : capture -> query -> Type where
-  Const : (path : String) -> PathPart capture query
-  Capture : (name : String) -> (type : capture) -> PathPart capture query
-  QueryParam : (name : String) -> (type : query) -> PathPart capture query
 
-data Path : capture -> query -> req -> resp -> Type where
--- (:>) : (left : PathPart capture query) -> (el left => (right : Path capture query req resp)) -> Path capture query req respA
--- (>>) : PathPArt -> Path -> Path
--- pp >> p = pp  :> const ps
-  (:>) : (left : PathPart capture query) -> (right : Path capture query req resp) -> Path capture query req resp
-  Outputs : Handler req resp -> Path capture query req resp
-infixr 5 :>
-
-
-implementation ( FromCapture capture
-               , FromQueryParam query
-               , FromRequest req
-               , ToResponse resp
-               ) => HasServer (Path capture query req resp) where
+( FromCapture capture
+, FromQueryParam query
+, FromRequest req
+, ToResponse resp
+) => Universe (Path capture query req resp) where
   el (Const path :> right) =  el right
   el (Capture name type :> right) = el type -> el right
   el (QueryParam name type :> right) = el type -> el right
   el (Outputs handler) = el handler
+
+( FromCapture capture
+, FromQueryParam query
+, FromRequest req
+, ToResponse resp
+) => HasServer (Path capture query req resp) where
   route ((Const path) :> right) handler (MkURL pathParts params) requestBody =
     --  Check if path in url. pop url
     --  Do nothing. because const carries no information
@@ -97,18 +87,12 @@ implementation ( FromCapture capture
 --extractPathInfo (Handle x) = []
 --extractPathInfo (left :> right) = left :: extractPathInfo right
 
-data Api : capture -> query -> req -> resp -> Type where
-  |||
-  ||| @ paths  a list of paths we can choose from
-  -- ||| @ noOverlappingPaths  A Proof that we have no paths that overlap
-  OneOf : (paths : Vect (S n) (Path capture query req resp)) ->
-          Api capture query req resp
 
-implementation (FromCapture capture
-              , FromQueryParam query
-              , FromRequest req
-              , ToResponse resp) =>
-  HasServer (Api capture query req resp) where
+(FromCapture capture
+, FromQueryParam query
+, FromRequest req
+, ToResponse resp) =>
+  HasServer (API capture query req resp) where
   el (OneOf xs) = HVect (map el xs)
 
   route (OneOf (path :: [])) (handler :: []) url requestBody =
@@ -126,6 +110,7 @@ implementation (FromCapture capture
 
 
 
+
 {-data Disjoint : Path -> Path -> Type where
   Base : Disjoint pp1 pp2 ->  Disjoint (pp1 :> p1) (pp2 :> p2)
   Step : Disjoint p1 p2 -> Disjoint (p :> p1)  (p :> p2)
@@ -138,3 +123,4 @@ data Disjoint : PP -> PP -> Type where
 
   Step : pp, p1, p2
 -}
+

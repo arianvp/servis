@@ -1,3 +1,4 @@
 package servis
+sourcedir = src
 modules = Servis
         , Example
