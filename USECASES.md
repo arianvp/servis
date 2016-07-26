@@ -78,9 +78,9 @@ For example, a Servant type should always end in a `GET` or `POST` or similar. b
 
 
 # Easier manipulation of data
-Because we have no syntactic distinction between term-level and type-level (types are 'first class'), working with the 'servant' DSL is a lot easier. We can do all sorts of cool stuff like:
+Because we have no syntactic distinction between term-level and type-level (types are 'first class'), working with the 'servant' DSL is a lot easier. Because our DSL is now just a simple AST living in the term-level, we can easily build up ASTs at runtime. This makes some cool stuff possible
 
-* Writing helper functions. Making the DSL less cumbersome to work with.
+## Writing helper functions. Making the DSL less cumbersome to work with.
  `path : String -> PathPart -> Path`  that do something like this:
 
   ```idris
@@ -88,5 +88,9 @@ Because we have no syntactic distinction between term-level and type-level (type
        ~
   Const "users" :> Const "stuff" :> Const "list" :> QueryParam Int String :> Get User
   ```
+
+## Migrating from other DSLs.  Like Swagger
+One could write a function `fromSwagger : SwaggerAST -> API` to use a swagger description and typecheck it!
+
 
   
