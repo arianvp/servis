@@ -81,7 +81,13 @@ type API = "a" :> ReqBody '[JSON] User
 ```
 and the compiler would not complain. Eventhough we _should_ always end with a `Get` or a `Post`. By using finer-grained kinds, we can stop these mistakes.
 
-A prime example of that having these implicit constraints that aren't enforced don't work might be that the first example in the Servant paper is actually a _malformed_ API Type.   The HTTP spec says that a `Get` should ignore `ReqBody` constraints and `Get` is idempotent by definition.  Thus, the Api type for `Echo` in the servant paper is nonsensical. The `Get` should be replaced by a `Post`
+A prime example of that having these implicit constraints that aren't enforced don't work might be that the first example in the Servant paper is actually a _malformed_ API Type:
+```
+type Echo = "echo"
+          :> ReqBody '[PlainText] String
+          :> Get     '[PlainText] String
+```
+The HTTP spec says that a `Get` should ignore `ReqBody` constraints and `Get` is idempotent by definition.  Thus, the Api type for `Echo` in the servant paper is nonsensical. The `Get` should be replaced by a `Post`
 
 We lose the extensibility of servant. But I (and tel (https://github.com/tel/serv) argue that HTTP is well-defined enough that a library can give you all the bells and whistles needed to cover 99% of all API building needs. And that we can thus give up some extensibility for more safety and better error messages.
 
