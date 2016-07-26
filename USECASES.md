@@ -71,7 +71,22 @@ This can be solved in both Haskell and Idris. In haskell we can do this by defin
 
 In Idris, we do not distinct in types and kinds, so we introduce the datatype `API` that has a data constructor `(:>) : API -> API -> API` for example.
 
-We lose the extensibility of servant. But I (and tel (https://github.com/tel/serv) argue that HTTP is well-defined enough that a library can give you all the bells and whistles needed to cover 99% of all API building needs. And that we can thus give up some extensibility for more safety and better error messages
+We lose the extensibility of servant. But I (and tel (https://github.com/tel/serv) argue that HTTP is well-defined enough that a library can give you all the bells and whistles needed to cover 99% of all API building needs. And that we can thus give up some extensibility for more safety and better error messages.
+
+It also is possible to create malformed expressions within the servant DSL itself due to it being of kind `*`. 
+For example, a Servant type should always end in a `GET` or `POST` or similar. but this is purely convention and cannot be enforced.  One could also write a type that never ends in a handlertype, which means it does not have a proper implementation in the type family.
 
 
+# Easier manipulation of data
+Because we have no syntactic distinction between term-level and type-level (types are 'first class'), working with the 'servant' DSL is a lot easier. We can do all sorts of cool stuff like:
 
+* Writing helper functions. Making the DSL less cumbersome to work with.
+ `path : String -> PathPart -> Path`  that do something like this:
+
+  ```idris
+  path"/users/stuff/list" :> QueryParam Int String :> Get User
+       ~
+  Const "users" :> Const "stuff" :> Const "list" :> QueryParam Int String :> Get User
+  ```
+
+  
