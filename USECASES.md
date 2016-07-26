@@ -64,12 +64,24 @@ This makes it possible for the user to easily make malformed api definitions tha
 
 For example.  Both `(:>) :: * -> * -> *` and  `(->) :: * -> * -> *` .  So one could accidentally mixup `:>` and `->` whilst `->` (the type constructor for functions) is not part of the Servant DSL. so no type family will accept it, leading to an obscure error 
 
-This is an erro that happens _A lot_ with servant uses. See https://www.reddit.com/r/haskell/comments/4uaef3/help_with_servantclient071/
-
+This is an error that happens _A lot_ with servant uses. See https://www.reddit.com/r/haskell/comments/4uaef3/help_with_servantclient071/
 
 This can be solved in both Haskell and Idris. In haskell we can do this by defining a closed kind for the DSL . The kind `API` would be introduced such that `(:>) :: API -> API -> API`.
 
 In Idris, we do not distinct in types and kinds, so we introduce the datatype `API` that has a data constructor `(:>) : API -> API -> API` for example.
+
+We can also split this API type up into multiple semantic portions. In the servant paper, the following semantic portions
+are identified: _api_, _item_, _method_.    _api_ is the toplevel 'AST'.  We can combine _api_s with `:<|>`  . an _item_ is a constraint on a request, like a `ReqBody` or a `QueryParam`. These can be added to an _api_ using `data (item ::k)_ :> api` . Finally, the last value in a chain of `:>`'s should be a `method`.
+
+The reason why `:>` is kind-polymorphic is that we can ommit a definition `data Const (str :: Symbol)` and directly wirte `"hey" :> "there" :> "i'm" :> "a" :> "path"`
+
+Of course, all these semantic portions are implicit. they're all just of the same kind `*`.  We could say
+```
+type API = "a" :> ReqBody '[JSON] User
+```
+and the compiler would not complain. Eventhough we _should_ always end with a `Get` or a `Post`. By using finer-grained kinds, we can stop these mistakes.
+
+A prime example of that having these implicit constraints that aren't enforced don't work might be that the first example in the Servant paper is actually a _malformed_ API Type.   The HTTP spec says that a `Get` should ignore `ReqBody` constraints and `Get` is idempotent by definition.  Thus, the Api type for `Echo` in the servant paper is nonsensical. The `Get` should be replaced by a `Post`
 
 We lose the extensibility of servant. But I (and tel (https://github.com/tel/serv) argue that HTTP is well-defined enough that a library can give you all the bells and whistles needed to cover 99% of all API building needs. And that we can thus give up some extensibility for more safety and better error messages.
 
