@@ -1,7 +1,7 @@
-module Servis.Server
+module Servis.Dependent.Server
 
 import HTTP.URL
-import Servis.API
+import Servis.Dependent.API
 import Data.Vect
 import Data.HVect
 
@@ -31,12 +31,14 @@ interface Universe u => HasServer u where
     request <- fromRequest requestType body
     pure (map (toResponse responseType) (handler request))
 
-
 ( FromCapture capture
 , FromQueryParam query
 , FromRequest req
 , ToResponse resp
 ) => HasServer (Path capture query req resp) where
+
+  route (Outputs x) handler url requestBody = route x handler url requestBody
+
   route ((Const path) :> right) handler (MkURL pathParts params) requestBody =
     --  Check if path in url. pop url
     --  Do nothing. because const carries no information
@@ -46,6 +48,7 @@ interface Universe u => HasServer u where
       (x::xs) => do
         guard (x == path)
         route right handler (MkURL xs params) requestBody
+
   route ((Capture name type) :> right) handler (MkURL pathParts params) requestBody =
     --  Parse capture from url, pop url.
     -- partially apply  handler with parsed result
@@ -64,6 +67,26 @@ interface Universe u => HasServer u where
     param <- fromQueryParam type val
     let newParams = dropWhile ((== name) . fst) params
     route right (handler param) (MkURL pathParts newParams) requestBody
+
+  route ((Const path) :*> right) handler (MkURL pathParts params) requestBody =
+    case pathParts of
+      [] => Nothing
+      (x::xs) => do
+        guard (x == path)
+        route (right ()) handler (MkURL xs params) requestBody
+
+  route ((Capture name type) :*> right) handler (MkURL pathParts params) requestBody =
+    case pathParts of
+      [] => Nothing
+      (x::xs) => do
+        capture <- fromCapture type x
+        route (right capture) (handler capture) (MkURL xs params) requestBody
+
+  route ((QueryParam name type) :*> right) handler (MkURL pathParts params) requestBody = do
+    val <- lookup name params
+    param <- fromQueryParam type val
+    let newParams = dropWhile ((== name) . fst) params
+    route (right param) (handler param) (MkURL pathParts newParams) requestBody
 
   route (Outputs x) handler url requestBody = route x handler url requestBody
 
@@ -93,7 +116,6 @@ interface Universe u => HasServer u where
 
 
 
-
 {-data Disjoint : Path -> Path -> Type where
   Base : Disjoint pp1 pp2 ->  Disjoint (pp1 :> p1) (pp2 :> p2)
   Step : Disjoint p1 p2 -> Disjoint (p :> p1)  (p :> p2)
@@ -106,4 +128,5 @@ data Disjoint : PP -> PP -> Type where
 
   Step : pp, p1, p2
 -}
+
 

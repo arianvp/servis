@@ -28,10 +28,10 @@ Universe (PathPart capture query) where
   el (QueryParam name type) = el type
 
 data Path : capture -> query -> req -> res -> Type where
-  Outputs : Handler req res -> Path capture query req res
-  (:>) :  PathPart capture query -> Path capture query req res -> Path capture query req res
+  Outputs : (handler : Handler req res) -> Path capture query req res
+  (:>) :  (pathPart : PathPart capture query) -> (path : Path capture query req res) -> Path capture query req res
   -- magic happens here. A dependent pair appears!
-  (:*>) : (pathPart : PathPart capture query) -> (el pathPart -> Path capture query req res) -> Path capture query req res
+  (:*>) : (pathPart : PathPart capture query) -> (path : (el pathPart -> Path capture query req res)) -> Path capture query req res
 
 infixr 5 :>
 infixr 5 :*>
@@ -44,6 +44,8 @@ infixr 5 :*>
   -- special case because we don't like () in our functions
   el (Const path :> right) =  el right
   el (pathPart :> right) = el pathPart -> el right
+  -- special case because we don't like () in our functions
+  el (Const path :*> right) = el (right ())
   el (pathPart :*> right) = (k : el pathPart) -> el (right k)
   el (Outputs handler) = el handler
 
