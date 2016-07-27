@@ -1,4 +1,4 @@
-module Servis.API
+module Servis.Dependent.API
 
 import Data.Vect
 import Data.HVect
@@ -11,30 +11,30 @@ interface Universe u where
 
 data Handler : req -> res -> Type where
   GET : (responseType : res) -> Handler req res
-  POST : (requestType : req) -> (responseType : res) -> Handler req res
+  POST : (Universe req, Universe res) => (requestType : req) -> (responseType : res) -> Handler req res
 
-(Universe resp, Universe req) => Universe (Handler req resp) where
+(Universe req, Universe resp) => Universe (Handler req resp) where
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
 
 data PathPart : capture -> query -> Type where
   Const : (path : String) -> PathPart capture query
-  Capture : (name : String) -> (type : capture) -> PathPart capture query
-  QueryParam : (name : String) -> (type : query) -> PathPart capture query
+  Capture : (Universe capture) => (name : String) -> (type : capture) -> PathPart capture query
+  QueryParam : (Universe query) => (name : String) -> (type : query) -> PathPart capture query
 
-( Universe capture
-, Universe query
-) => Universe (PathPart capture query) where
+Universe (PathPart capture query) where
   el (Const path) = ()
   el (Capture name type) = el type
   el (QueryParam name type) = el type
 
 data Path : capture -> query -> req -> res -> Type where
   Outputs : Handler req res -> Path capture query req res
-  (:>) : PathPart capture query -> Path capture query req res -> Path capture query req res
+  (:>) :  PathPart capture query -> Path capture query req res -> Path capture query req res
+  -- magic happens here. A dependent pair appears!
   (:*>) : (pathPart : PathPart capture query) -> (el pathPart -> Path capture query req res) -> Path capture query req res
 
 infixr 5 :>
+infixr 5 :*>
 
 ( Universe capture
 , Universe query
@@ -58,3 +58,4 @@ data API : capture -> query -> req -> res -> Type where
   el (OneOf xs) = HVect (map el xs)
 
 infixr 7 ::
+
