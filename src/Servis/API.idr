@@ -49,6 +49,22 @@ infixr 5 :*>
   el (pathPart :*> right) = (k : el pathPart) -> el (right k)
   el (Outputs handler) = el handler
 
+
+data DisjointPP : PathPart capture query 
+               -> PathPart capture query
+               -> Type where
+  ConstD : Not (str = str') -> DisjointPP (Const str) (Const str')
+  QueryD : Not (name = name') -> DisjointPP (QueryParam name type1) (QueryParam name type2)
+
+data DisjointPath : Path capture query req res
+              -> Path capture query req res
+              -> Type where
+
+   
+  OutputsD : Not (handler1 = handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
+  Base : DisjointPP pp1 pp2 -> DisjointPath (pp1 :> p1) (pp2 :> p2)
+  Step : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
+
 data API : capture -> query -> req -> res -> Type where
   OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
 
