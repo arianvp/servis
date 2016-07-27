@@ -1,6 +1,7 @@
 module Example
 import Servis.API
 import Servis.Server
+import Servis.Docs
 import Data.Vect
 import Data.HVect
 
@@ -8,22 +9,32 @@ import Data.HVect
 -- universe of path captures
 data CaptureU = CINT | CSTRING
 
-implementation Universe CaptureU where
+Universe CaptureU where
   el CINT = Int
   el CSTRING = String
+
+HasDocs CaptureU where
+  docs CINT = "Int"
+  docs CSTRING = "String"
 
 -- universe of queryparams
 data QueryU = QINT | QSTRING
 
-implementation Universe QueryU where
+Universe QueryU where
   el QINT = Int
   el QSTRING = String
 
+HasDocs QueryU where
+  docs QINT = "Int"
+  docs QSTRING = "String"
+
 data NoU
 
-implementation Universe NoU where
+Universe NoU where
   el _ = ()
 
+HasDocs NoU where
+  docs _ = "()"
 
 -- universe of response types
 data RespU = USER | LIST RespU
@@ -34,12 +45,18 @@ record User where
   name : String
   id : Int
 
-implementation Universe RespU where
+HasDocs User where
+  docs _ = "User"
+
+Universe RespU where
   el USER = User
   el (LIST x) = List (el x)
 
+HasDocs RespU where
+  docs USER = "User"
+  docs (LIST x) = "List (" ++ docs x ++ ")"
 
-UserApi : Api CaptureU QueryU NoU RespU
+UserApi : API CaptureU QueryU NoU RespU
 UserApi = OneOf
   [ Const "user" :> Capture "userId" CINT :> Outputs (GET USER)
   , Const "user" :> QueryParam "limit" QINT :> Outputs (GET (LIST USER))
@@ -50,6 +67,11 @@ getUserById x = return (MkUser "hey" 0)
 
 getUsersLimit : Int -> IO (List User)
 getUsersLimit x = return ([MkUser "hey" 0])
+
+documentation : String
+documentation = docs path
+  where path : Path CaptureU NoU NoU RespU
+        path = (Const "user" :> Capture "userId" CINT :> Outputs (GET USER))
 
 userApi : el UserApi
 userApi = [getUserById, getUsersLimit]
