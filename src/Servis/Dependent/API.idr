@@ -1,7 +1,7 @@
 module Servis.Dependent.API
 
-import Data.Vect
-import Data.HVect
+import public Data.Vect
+import public Data.HVect
 
 %default total
 %access public export
