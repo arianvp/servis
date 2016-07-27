@@ -38,8 +38,6 @@ renderPath ((Const x) :> y) params =
     "/" ++ x ++ renderPath y params
 renderPath ((Capture name type) :> y) params =
   "/<" ++ name ++ ":" ++ docs type ++ ">" ++ renderPath y params
-
-renderPath (x :*> y) params = "DEPENDENT ROUTE. ERROR"
 renderPath _ _ = ""
 
 ( HasDocs capture
@@ -56,5 +54,4 @@ renderPath _ _ = ""
       getParams ((Const x) :> y) = getParams y
       getParams ((Capture name type) :> y) = getParams y
       getParams ((QueryParam name type) :> y) = (name, type) :: getParams y
-      getParams (x :*> y) = []
 
