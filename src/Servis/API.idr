@@ -2,6 +2,8 @@ module Servis.API
 
 import Data.Vect
 import Data.HVect
+import Data.List
+import Data.List.Quantifiers
 
 %default total
 %access public export
@@ -59,7 +61,6 @@ data API : capture -> query -> req -> res -> Type where
 
 data DisjointPP : PathPart capture query -> PathPart capture query -> Type where
   ConstD : Not (str = str') -> DisjointPP (Const str) (Const str')
-  QueryD : Not (name = name') -> DisjointPP (QueryParam name type1) (QueryParam name type2)
 
 data DisjointPath : Path capture query req res -> Path capture query req res -> Type where
   OutputsD : Not (handler1 = handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
@@ -67,12 +68,12 @@ data DisjointPath : Path capture query req res -> Path capture query req res -> 
   PathStep : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
 
 
-data DisjointAPI : API capture query req res -> Type where
-  -- Ask wouter how to proceed.
-  -- For each path x we add, we must prove that no (x' in xs) overlaps with x
-  -- before DisjointAPI (OneOf (x:xs))
+data DisjointAPI : List (Path capture query req res) -> Type where
+  Base : DisjointAPI []
+  Step : (x : Path capture query req res) -> All (DisjointPath x) xs -> DisjointAPI (x::xs)
 
-  -- APIBase : DisjointAPI (OneOf []) -- an empty api is disjoint
 
+checkIt : (list : List (Path capture query req res)) -> {auto ok: DisjointAPI list } -> List (Path capture query req res)
+checkIt a = a
 
 
