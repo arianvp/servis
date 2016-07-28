@@ -47,7 +47,7 @@ infixr 5 :>
 
 
 data API : capture -> query -> req -> res -> Type where
-  OneOf : (paths : Vect _ (Path capture query req res)) -> API capture query req res
+  OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
 
 ( Universe capture
 , Universe query
@@ -72,7 +72,7 @@ data DisjointAPI : API capture query req res -> Type where
   -- For each path x we add, we must prove that no (x' in xs) overlaps with x
   -- before DisjointAPI (OneOf (x:xs))
 
-  APIBase : DisjointAPI (OneOf []) -- an empty api is disjoint
+  -- APIBase : DisjointAPI (OneOf []) -- an empty api is disjoint
 
 
 

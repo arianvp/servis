@@ -1,7 +1,7 @@
 module Servis.Server
 
-import HTTP.URL
-import Servis.API
+import public HTTP.URL
+import public Servis.API
 import Data.Vect
 import Data.HVect
 
@@ -72,7 +72,7 @@ interface Universe u => HasServer u where
 --extractPathInfo (left :> right) = left :: extractPathInfo right
 
 
-(FromCapture capture
+( FromCapture capture
 , FromQueryParam query
 , FromRequest req
 , ToResponse resp) =>
