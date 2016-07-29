@@ -15,6 +15,36 @@ data Handler : req -> res -> Type where
   GET : (responseType : res) -> Handler req res
   POST : (requestType : req) -> (responseType : res) -> Handler req res
 
+injGET : (GET x = GET y) -> x = y
+injGET Refl = Refl
+
+injPOSTReq : (POST requestType1 responseType1 = POST requestType2 responseType2) -> requestType1 = requestType2
+injPOSTReq Refl = Refl
+
+injPOSTResp : (POST requestType1 responseType1 = POST requestType2 responseType2) -> responseType1 = responseType2
+injPOSTResp Refl = Refl
+
+getNotPost : (GET responseType = POST requestType responseType1) -> Void
+getNotPost Refl impossible
+
+cong_POST : (prf2 : responseType1 = responseType2) -> (prf1 : requestType1 = requestType2) -> POST requestType1 responseType1 = POST requestType2 responseType2
+cong_POST Refl Refl = Refl
+
+(DecEq req, DecEq res) => DecEq (Handler req res) where
+  decEq (GET responseType1) (GET responseType2) =
+    (case decEq responseType1 responseType2 of
+          (Yes prf) => Yes (cong prf)
+          (No contra) => No ((\h => contra (injGET h))))
+  decEq (POST requestType1 responseType1) (POST requestType2 responseType2) =
+    (case decEq requestType1 requestType2 of
+          (Yes prf1) => (case decEq responseType1 responseType2 of
+                             (Yes prf2) => Yes (cong_POST prf2 prf1)
+                             (No contra) => No (\h => contra (injPOSTResp h)))
+          (No contra) => No (\h => contra (injPOSTReq h)))
+  decEq (GET _) (POST _ _) = No getNotPost
+  decEq (POST _ _) (GET _) = No (negEqSym getNotPost)
+
+
 (Universe resp, Universe req) => Universe (Handler req resp) where
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
