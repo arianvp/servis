@@ -147,15 +147,92 @@ It would be nice if we could verify at compile time that no routes in an API spe
 
 
 \section{Servis}
-In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to the DSL. Next, we'll look at solving the overlapping routes problem by writing proofs in Idris.
+In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to specification defined by the API DSL\@. Next, we'll look at solving the overlapping routes problem by writing proofs in Idris.
 Finally, we will extend the DSL to add \emph{pi-types}, allowing us to describe dependencies in our API\@.  For example, one might want to describe  the size of a list of users in the API, but let the size depend on a query parameter \emph{limit} that limits the response size.  It would then force the implementor of the API to only return values smaller or equal to limit in size.
 
 \subsection{The DSL}
+Here we will, step by step, describe the DSL in which we describe APIs.
+Furthermore, we will address the problem of the open-kindedness of Servant.
 \subsection{A simple interpreter: Documentation generation}
+Here we will show a simple interpretation of the DSL, by generating some basic documentation.
+It's basically a function \mintinline{idris}{docs : API -> String}. 
 \subsection{An interpreter for an HTTP Server}
+A more advanced example where we define two interpreters. One 'interpreter' that generates types from our DSL such that we can type-check our server handler implementations. (The universe pattern), and another interpreter that routes requests to these handler implementations.
 \subsubsection{Checking explicit status codes}
+Shows that we can enforce explicit status codes
+
+\subsection{A proof of non-overlapping routes}
+We will describe types for helping prove that routes in an API definition don't overlap.  We do this
+by providing Decidable Equality proofs for all parts of our DSL.
+\begin{minted}{idris}
+
+||| A Proof that the GET dtor is injective over its requestType
+injGET : (GET x = GET y) -> x = y
+injGET Refl = Refl
+
+||| A proof that the POST dtor is injective over its requestType
+injPOSTReq : (POST requestType1 responseType1 = POST requestType2 responseType2) -> requestType1 = requestType2
+injPOSTReq Refl = Refl
+
+||| A Proof that the POST dtor is injective over its responseType
+injPOSTResp : (POST requestType1 responseType1 = POST requestType2 responseType2) -> responseType1 = responseType2
+injPOSTResp Refl = Refl
+
+||| A Proof that a GET is not a POST
+getNotPost : (GET responseType = POST requestType responseType1) -> Void
+getNotPost Refl impossible
+
+||| A proof that GET is congruent
+cong_GET : (prf : responseType1 = responseType2) -> GET responseType1 = GET responseType2
+cong_GET = cong
+
+||| A proof POST is congruent
+cong_POST : (prf2 : responseType1 = responseType2) -> (prf1 : requestType1 = requestType2) -> POST requestType1 responseType1 = POST requestType2 responseType2
+cong_POST Refl Refl = Refl
+
+(DecEq req, DecEq res) => DecEq (Handler req res) where
+  decEq (GET responseType1) (GET responseType2) =
+    (case decEq responseType1 responseType2 of
+          (Yes prf) => Yes (cong prf)
+          (No contra) => No ((\h => contra (injGET h))))
+  decEq (POST requestType1 responseType1) (POST requestType2 responseType2) =
+    (case decEq requestType1 requestType2 of
+          (Yes prf1) => (case decEq responseType1 responseType2 of
+                             (Yes prf2) => Yes (cong_POST prf2 prf1)
+                             (No contra) => No (\h => contra (injPOSTResp h)))
+          (No contra) => No (\h => contra (injPOSTReq h)))
+  decEq (GET _) (POST _ _) = No getNotPost
+  decEq (POST _ _) (GET _) = No (negEqSym getNotPost)
+data DisjointPP : PathPart capture query -> PathPart capture query -> Type where
+  ConstD : Not (str = str') -> DisjointPP (Const str) (Const str')
+
+data DisjointPath : Path capture query req res -> Path capture query req res -> Type where
+  OutputsD : Not (handler1 = handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
+  PathBase : DisjointPP pp1 pp2 -> DisjointPath (pp1 :> p1) (pp2 :> p2)
+  PathStep : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
+
+
+data DisjointAPI : List (Path capture query req res) -> Type where
+  Base : DisjointAPI []
+  Step : (x : Path capture query req res) -> All (DisjointPath x) xs -> DisjointAPI (x::xs)
+\end{minted}
 \subsection{Pi-types}
+Adds dependent pairs to our DSL such that we can describe dependencies between query params, captures and return types.  Example:
+
+\begin{minted}{haskell}
+exampleOfDependentPath : Path EmptyU QueryU EmptyU RespU
+exampleOfDependentPath =
+  QueryParam "limit" NAT :*> \limit => Outputs (GET (BLIST limit USER))
+
+getUsersLimit : (limit : Nat) -> IO (BoundedList limit User)
+getUsersLimit limit = pure . take limit $ users
+
+exampleOfDependentPathHandler : el Example.exampleOfDependentPath
+exampleOfDependentPathHandler = getUsersLimit
+
+\end{minted}
 \subsection{New problems that pi-type create}
+Here we will describe how pi-types adds problems. For example we cannot easily generate documentation anymore, prove that there are no overlapping routes, or prove that statuscodes are adhered to.
 
 \section{Summary}
 \section{Related work}
