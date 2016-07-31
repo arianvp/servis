@@ -5,13 +5,161 @@
 \usepackage{amsfonts}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{minted}
 \usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\author{Arian van Putten \\ a.vanputten@uu.nl}
+\title{Servis: A dependently typed DSL for web APIs}
 \begin{document}
+\maketitle
 \begin{abstract}
 In this paper, we describe a DSL for web APIs named Servis. Servis is heavily inspired by Servant, a haskell type-level DSL for web APIs,  but tries to solve identified shortcomings by using a dependently typed language called Idris. Servis uses the universe pattern to deduce types from an API description such that we can verify at compile time that the implementation of the API matches the description.
 
-Furthermore, we take a look at if dependent types can bring more to the table in terms of expressiveness of API descriptions than the original Servant DSL. Specifically, we introduce $\pi$-types to describe interdependencies within an API description.
+Furthermore, we take a look at if dependent types can bring more to the table in terms of expressiveness of API descriptions than the original Servant DSL\@. Specifically, we introduce $\pi$-types to describe interdependencies within an API description.
 
+  TODO: rewrite abstract \emph{after} I finish the paper :-)
 
 \end{abstract}
+
+\section{Introduction}
+Servant is an extensible type-level DSL for Haskell, that tries to make web APIs \emph{first-class}~\cite{servant}. A web API should be a thing that can be named, passed to, or returned by functions. Just like any other term in a language.
+
+It does this by describing the DSL at the type-level. And then uses \emph{type families} (type-level functions) to be able to perform computations on the API specifications.  Using these type families, we are able to write different \emph{interpretations} of an API\@.  Example of interpretations are: generating documentation from a specification, generating types of a server implementation, or even generating a client that can interfact with the API\@.
+
+In this paper, I will describe a port of Servant in Idris, and explore what kind of benefits this brings us.
+
+\subsection{An introduction to Servant}
+I will now give a very short overview of the internals of Servant. We will start by describing the type-level DSL of servant. 
+
+\begin{listing}[H]
+\begin{minted}{haskell}
+data api1 :<|> api2
+infixr 8 :<|>
+
+data (item :: k) :> api
+infixr 9 :>
+
+data ReqBody (ctypes :: [*] (t :: *)
+data Capture (symbol :: Symbol) (t :: *)
+
+data Get (ctypes :: [*]) (t :: *)
+data Post (ctypes :: [*]) (t :: *)
+data JSON
+\end{minted}
+\caption{The Servant DSL}
+\label{lab:servant}
+\end{listing}
+
+TODO give a short overview of servant
+
+Servant has a few limitations which we will describe in Section~\ref{sec:limitations}. 
+
+
+\subsection{Why idris}
+Idris is a language that in syntax is rather similar to Haskell, but has a more powerful type system. Idris is a dependently-typed language. This means that types are fist-class citizens. We can pass types to functions, let functions create new types, and let types depend on other value-level terms.
+
+Though haskell has type-level functions (called type-families), it does not allow these functions to dpend on term-level values. There is a distinct boundary between type-level and term-level, whilst the two are merged in Idris. This makes doing computations with types a lot more natural (no special constructs are needed, just write functions), but also lets us do some more powerful stuff like letting types actually depend on runtime user input.
+
+Dependent Haskell is currently in the making, and probably planned for around GHC version 8.6~\cite{neeeded}. In the future, it would probably be very feasible to port this library back to Haskell and bring all the benefits along with it.
+
+\subsection{Contributions}
+In this paper, I make the following contributions:
+
+TODO reword
+\begin{itemize}
+  \item I point out several problems an limitations of the original Servant DSL
+  \item I show a port of servant to Idris, a dependently-typed language
+  \item I show how new techniques from Idris can help mitigate some of the problems that Servant has.
+\end{itemize}
+
+\section{Limitations of Servant}\label{sec:issues}
+\subsection{Term and type-level are not unified in Haskell}
+As explained in the introduction, the Servant DSL lives in the type-level. In haskell, types and terms are separated. One can lift terms into the type-level using GHC extensions like \texttt{XDataKinds}, but that only gets us so far.  On the term level, Haskell has many great libraries and data structures that can be used. For example, all kinds of string manipulations. It would be useful to be able to use these functions to manipulate APIs, making them truly first-class. Now they are only first-class in the type level.
+
+For example, a useful function would be \mintinline{haskell}{path "/users/friends/etc" = "users" :> "friends" :> "etc"} to reduce noise in the DSL\@. But this is currently impossible to write because Strings in the type level are of kind \mintinline{haskell}{Symbol} and not \mintinline{haskell}{String} so all our favorite string manipulation functions like \mintinline{haskell}{splitOn "/"} will not work. This would mean that we would have to re-implement all kinds of utility functions on the type-level.
+
+\subsection{A kind of APIs}
+As mentioned in Section~\ref{sec:servant_intro}, a delibirate choice has been made to let the Servant DSL live in the open kind \mintinline{haskell}{*}. Though this makes the DSL extensible, it also makes the DSL fragile and prone to error.
+
+To give a real-world example, here is a snippet from a user on the Haskell Subreddit that could not get his API to work:
+
+\begin{listing}[H]
+\begin{minted}{haskell}
+type SoundcloudTrackAPI = "tracks" :> 
+  (    QueryParam "client_id" T.Text 
+    :> QueryParams "genres" T.Text
+    -> Get [JSON] [ST.Track] 
+  :<|> QueryParam "client_id" T.Text
+    :> Capture "id" Int
+    :> Get [JSON] ST.Track
+  )
+\end{minted}
+\caption{A malformed API}
+\label{code:problem}
+\end{listing}
+
+The problem is hard to spot, but the user typed wrote \mintinline{haskell}{->} instead of \mintinline{haskell}{:>}.  This code compiles fine though. Because the Servant DSL lives in kind \mintinline{haskell}{*}, \mintinline{haskell}{:>} is   of kind \mintinline{haskell}{* -> * -> *}. Which is the same kind as the kind of \mintinline{haskell}{->}.
+
+Only when one would try to interpret the DSL, like in Listing~\ref{code:interpret}, one would get a type error because no type family pattern matches on \mintinline{haskell}{->}.
+
+\begin{listing}
+\begin{minted}{haskell}
+searchTracksByGenre :: Maybe T.Text 
+                    -> [T.Text]
+                    ->  Manager
+                    -> BaseUrl
+                    -> ClientM [ST.Track]
+getTrack            :: Maybe T.Text
+                    -> Int
+                    -> Manager
+                    -> BaseUrl
+                    -> ClientM ST.Track
+(searchTracksByGenre :<|> getTrack) = client soundcloudAPI 
+\end{minted}
+  \caption{An interpretation of the API (Listing ~\ref{code:problem})}
+  \label{code:interpret}.
+\end{listing}
+
+Preferably, one would want to define a new open kind \mintinline{haskell}{API} such that \mintinline{haskell}{(:>) :: API -> API -> API}, but this is not possible in Haskell (or Idris). Instead, one could define a closed kind (using \textt{XDataKinds}), in which we define the entire Servant DSL. This would mean we would lose extensibility of the DSL, but we gain kind-safety.
+
+Also, as described in Section~\ref{sec:servant_intro}, the Servant DSL is split up in several semantic portions.  For example, \mintinline{haskell}{:>} should take an \mintinline{haskell}{item} on the left-hand side, which describes either a constraint like \mintinline{haskell}{ReqBody} or a path-piece, whilst the right-hand side should be an \mintinline{haskell}{api}. These semantic portions are implict and not checked though. So we can create totally non-sensical API types like \mintinline{haskell}{type Nonsense = (Int :>Int) :<|> ("hey ":> Int)} that have no interpretation at all.
+
+Instead of having these implicit semantic rules about what kind of arguments an operator can take in the Servant DSL, we could define a distinct closed kind for each semantic portion. Such that the type of \mintinline{haskell}{:>} changes to the following: \mintinline{haskell}{(:>) :: Item -> API -> API}.
+
+Another implict rule is, that a chain of \mintinline{haskell}{:>} should always end in a \mintinline{haskell}{Get} or a \mintinline{haskell}{Post}. So this should be invalid: \mintinline{haskell}{type API = "a" :> ReqBody [JSON] User}.  This can also not be checked if we do not add more fine-grained kinds to the DSL.
+
+\subsection{Explicit status codes}
+An API that describes how stuff goes right is good, and API that describes how stuff goes wrong is great. But currently, Servant has no way to indicate in the API description what kind of status codes an endpoint can return. Thus this also does not show up in the generated documentation.
+
+It would be nice to add a list of possible status codes that an endpoint can returns, and then also be able to check whether a server implementation actually only returns one of the specified status codes if something goes wrong (or right).
+
+\subsection{Overlapping routes}
+Another problem with Servant is that there is no protection for overlapping routes. If two routes could resolve to the same path, Servant makes a left-biased choice~\cite{needed}.
+It would be nice if we could verify at compile time that no routes in an API specification can overlap.
+
+\begin{listing}
+\begin{minted}{haskell}
+  type API  = "users" :> Capture "args" String :> Get [JSON] User
+         :<|> "users" :> "favorites" :> GET [JSON] User
+\end{minted}{haskell}
+\caption{An example of overlapping routes. The capture will be chosen if args equals "favorites"}
+\end{listing}
+
+
+
+\section{Servis}
+In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to the DSL. Next, we'll look at solving the overlapping routes problem by writing proofs in Idris.
+Finally, we will extend the DSL to add \emph{pi-types}, allowing us to describe dependencies in our API\@.  For example, one might want to describe  the size of a list of users in the API, but let the size depend on a query parameter \emph{limit} that limits the response size.  It would then force the implementor of the API to only return values smaller or equal to limit in size.
+
+\subsection{The DSL}
+\subsection{A simple interpreter: Documentation generation}
+\subsection{An interpreter for an HTTP Server}
+\subsubsection{Checking explicit status codes}
+\subsection{Pi-types}
+\subsection{New problems that pi-type create}
+
+\section{Summary}
+\section{Related work}
+Talk about tel/serv. An inspiration for this project.
+\section{Conclusions and future work}
+
 \end{document}
