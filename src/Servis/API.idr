@@ -11,7 +11,14 @@ import Data.List.Quantifiers
 interface Universe u where
   el : u -> Type
 
-data Handler : req -> res -> Type where
+
+||| The empty universe
+data EmptyU = VOID
+
+DecEq EmptyU where
+  decEq VOID VOID = Yes Refl
+
+data Handler : (req : Type)  -> (res : Type) -> Type where
   GET : (responseType : res) -> Handler req res
   POST : (requestType : req) -> (responseType : res) -> Handler req res
 
@@ -58,9 +65,20 @@ congPOST Refl Refl = Refl
   el (GET responseType) = IO (el responseType)
   el (POST requestType responseType) = el requestType -> IO (el responseType)
 
-data PathPart : capture -> query -> Type where
+||| PathPart is a part of a path.
+||| @ capture the universe of captures
+||| @ query   the universe of query params
+data PathPart : (capture : Type) -> (query : Type) -> Type where
+  ||| A constant piece of text
+  ||| @ path the path part
   Const : (path : String) -> PathPart capture query
+  ||| A capture of a variable name of a specific type
+  ||| @ name  the name of the variable
+  ||| @ type  the type of the variable
   Capture : (name : String) -> (type : capture) -> PathPart capture query
+  ||| A query param of a variable name of a specific type
+  ||| @ name  the name of the variable
+  ||| @ type  the type of the variable
   QueryParam : (name : String) -> (type : query) -> PathPart capture query
 
 injConst : (Const x = Const y) -> x = y
@@ -125,8 +143,12 @@ injQueryParamName Refl = Refl
   el (Capture name type) = el type
   el (QueryParam name type) = el type
 
-data Path : capture -> query -> req -> res -> Type where
-  Outputs : Handler req res -> Path capture query req res
+||| Describes a Path. A Path consists of path parts followed by a handler
+data Path : (capture : Type) -> (query : Type) -> (req : Type) -> (res : Type) -> Type where
+  ||| Ends a path with a handler
+  ||| @ handler the handler
+  Outputs : (handler : Handler req res) -> Path capture query req res
+  ||| Conses a pathpart to a path
   (:>) : PathPart capture query -> Path capture query req res -> Path capture query req res
 infixr 5 :>
 
@@ -178,7 +200,10 @@ injSeqLHS Refl = Refl
 
 
 
-data API : capture -> query -> req -> res -> Type where
+OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
+
+||| An API is a non-empty list of  paths. 
+data API : (capture : Type) -> (query : Type) -> (req : Type) -> (res : Type) -> Type where
   OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
 
 ( Universe capture
@@ -208,24 +233,29 @@ congOneOfBase Refl = Refl
          (No contra) => No ?a_3
 
 -}
-data DisjointPP : PathPart capture query -> PathPart capture query -> Type where
-  ConstD : Not (str = str') -> DisjointPP (Const str) (Const str')
+data IsNo : Dec a -> Type where
+  ItIsNo : IsNo (No x)
+
+data IsYes : Dec a -> Type where
+  ItIsYes : IsYes (Yes x)
+
+{-data DisjointPP : PathPart capture query -> PathPart capture query -> Type where
+  ConstD : IsNo (decEq str str') -> DisjointPP (Const str) (Const str')
 
 data DisjointPath : Path capture query req res -> Path capture query req res -> Type where
-  OutputsD : Not (handler1 = handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
-  PathBase : DisjointPP pp1 pp2 -> DisjointPath (pp1 :> p1) (pp2 :> p2)
-  PathStep : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
+  OutputsD : IsNo (decEq handler1 handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
+
+data DisjointPath : Path capture query req res -> Path capture query req res -> Type where
+  OutputsD : IsNo (decEq handler1 handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
+  StepP : DisjointPP pp1 pp2 -> DisjointPath p1 p2 -> DisjointPath (pp1 :> p1) (pp2 :> p2)
+  -- PathStep : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
 
 
 data DisjointAPI : List (Path capture query req res) -> Type where
   Base : DisjointAPI []
   Step : (x : Path capture query req res) -> All (DisjointPath x) xs -> DisjointAPI (x::xs)
+  -}
 
 
-checkItTo : (path1 : Path capture query req res) -> (path2 : Path capture query req res) -> {auto ok: DisjointPath path1 path2} -> Path capture query req res
-checkItTo a b = a
-
-checkIt : (list : List (Path capture query req res)) -> {auto ok: DisjointAPI list } -> List (Path capture query req res)
-checkIt a = a
 
 
