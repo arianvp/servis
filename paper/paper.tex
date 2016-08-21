@@ -5,6 +5,7 @@
 \usepackage{amsfonts}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{hyperref}
 \usepackage{minted}
 \usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
 \author{Arian van Putten \\ a.vanputten@uu.nl}
@@ -50,6 +51,8 @@ data JSON
 \end{listing}
 
 TODO give a short overview of servant
+
+
 
 Servant has a few limitations which we will describe in Section~\ref{sec:limitations}. 
 
@@ -150,13 +153,215 @@ It would be nice if we could verify at compile time that no routes in an API spe
 In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to specification defined by the API DSL\@. Next, we'll look at solving the overlapping routes problem by writing proofs in Idris.
 Finally, we will extend the DSL to add \emph{pi-types}, allowing us to describe dependencies in our API\@.  For example, one might want to describe  the size of a list of users in the API, but let the size depend on a query parameter \emph{limit} that limits the response size.  It would then force the implementor of the API to only return values smaller or equal to limit in size.
 
+\subsection{The Universe pattern}
+The Servis DSL makes use of the Universe pattern to map an API description to types of handlers.
+ A universe is a type \mintinline{idris}{U : Type} which contains names for types and a type family \mintinline{idris}{el : U -> Type} that assigns to every name \mintinline{idris}{a : U} the type of its elements \mintinline{idris}{el a : Type} \cite{generic}\@.
+
+ In idris, we could define this as the following interface:
+ \begin{listing}
+ \begin{minted}{idris}
+interface Universe (u : Type) where
+  el : u -> Type
+ \end{minted}{idris}
+   \caption{Universe interface in Idris}
+ \end{listing}
+
+ In our case, we have a datatype \mintinline{idris}{API : Type}, which describes our API, and \mintinline{idris}{el} maps values to handler types. A Short example:
+ \begin{minted}{idris}
+
+-- we define a value of API
+api : API
+api = Const "users" :> Capture Int "userId" :> Outputs (Get USER)
+
+getUser : Int -> IO User
+getUser = ?someDatabaseMagic
+
+--  el api evaluates to  Int -> IO User
+handler : el api
+handler = getUser
+ \end{minted}
 \subsection{The DSL}
-Here we will, step by step, describe the DSL in which we describe APIs.
-Furthermore, we will address the problem of the open-kindedness of Servant.
+So what does this type \mintinline{idris}{API} look like?
+\subsubsection{Handler}
+Before we will look at routes, lets think of what an endpoint should look like.
+We should be able to handle the HTTP verbs. We will only implement \mintinline{idris}{GET} and \mintinline{idris}{POST}, because the others are very similar.
+For a \mintinline{idris}{GET}, we should be able to specify a return type of the handler,  and for a \mintinline{idris}{POST}, we should be able to
+specify a request body type, and a return type.
+
+
+A first try at describing this as a datatype for our universe  could look something like this:
+\begin{listing}
+  \begin{minted}{idris}
+data Handler : Type where
+  GET : (responseType : Type) -> Handler req res
+  POST : (requestType : Type) -> (responseType : Type) -> Handler req res
+
+Universe Handler where
+  -- a GET handler just returns something of type responseType
+  el (GET responseType) = IO responseType
+  -- a POST handler takes the requestBody as argument, and returns a response
+  el (POST requestType responseType) = requestType -> IO responseType
+
+  \end{minted}
+\end{listing}
+
+We could then define a handler for \mintinline{idris}{GET}ting users as follows:
+\begin{minted}{idris}
+record User where
+  constructor MkUser
+  name : String
+  email : String
+
+userHandler : Handler
+userHandler = GET User
+\end{minted}
+
+However, once we start implementating an actual server in Section~\ref{sec:server}, we will discover that this definition is not ideal. What if we want to write some
+function that does something different based on the \mintinline{idris}{responseType} of a \mintinline{idris}{GET}?
+For example, based on value of \mintinline{idris}{responseType}, we need to decide how to encode the response body to JSON. Lets imagine a hypothetical function \mintinline{idris}{selectEncoder} that tries to implement this behaviour:
+
+\begin{minted}{idris}
+selectEncoder : Type -> Encoder
+selectEncoder User = ?jsonEncoderForAUser
+
+userEncoder : Encoder
+userEncoder = selectEncoder User
+\end{minted}{idris}
+
+Sadly enough, this will give us a compiler error. The problem is that in Idirs, we cannot pattern match on values of \mintinline{idris}{Type}. 
+However, this exact problem can be solved with universes! We can define a data type \mintinline{idris}{ResponseUniverse : Type} which names
+the \mintinline{idris}{User} type. We can then pattern-match on \mintinline{idris}{ResponseUniverse} instead of \mintinline{idris}{Type}!
+And whenever we need the \mintinline{idris}{User} type, we can just call \mintinline{idris}{el USER : Type}.
+
+\begin{minted}{idris}
+data ResponseUniverse : Type where
+  USER : ResponseUniverse
+
+Universe ResponseUniverse where
+  el USER = User
+
+selectEncoder : ResponseUniverse -> Encoder
+selectEncoder USER = ?jsonEncoderForAUser
+
+userEncoder : Encoder
+userEncoder : selectEncoder USER
+\end{minted}
+
+This leads us to the following definition of \mintinline{idris}{Handler}:
+
+\begin{listing}
+  \begin{minted}{idris}
+data Handler : (req : Type)  -> (res : Type) -> Type where
+  GET : (responseType : res) -> Handler req res
+  POST : (requestType : req) -> (responseType : res) -> Handler req res
+
+(Universe req, Universe res) => Universe (Handler req res) where
+  el (GET responseType) = IO (el responseType)
+  el (POST requestType responseType) =
+    el requestType -> IO (el responseType)
+  \end{minted}
+  \caption{The new Handler definition}
+\end{listing}
+
+\subsubsection{Path and PathPart}
+Of course we do not only get request information from the request body,
+we also get information about a request by parsing it's request URL. This
+is where \mintinline{idris}{Path}s and \mintinline{idris}{PathPart}s come into play. 
+When we talk about path parts, we mean sections of an path template that convey parsable information.
+For example, the following path template has three path parts: \texttt{/users/\string{user\_id\string}?search=\string{query\string}}. A constant piece
+in the path \texttt{users}, a variable capture \texttt{user\_id} and a query param \texttt{search}. This
+decomposition of a path template can be written down as a datatype. In this datatype we do not only
+want to describe the names of the parts of these paths, but also their types. Hence, we will parameterize
+over a universe similarly to how we defined \mintinline{idris}{Handler}.
+\begin{minted}{idris}
+
+||| PathPart is a part of a path.
+||| @ capture the universe of captures
+||| @ query   the universe of query params
+data PathPart : (capture : Type) -> (query : Type) -> Type where
+  ||| A constant piece of text
+  ||| @ path the path part
+  Const : (path : String) -> PathPart capture query
+  ||| A capture of a variable name of a specific type
+  ||| @ name  the name of the variable
+  ||| @ type  the type of the variable
+  Capture : (name : String) -> (type : capture) -> PathPart capture query
+  ||| A query param of a variable name of a specific type
+  ||| @ name  the name of the variable
+  ||| @ type  the type of the variable
+  QueryParam : (name : String) -> (type : query) -> PathPart capture query
+\end{minted}
+
+A \mintinline{idris}{Path} is simply a list if \mintinline{idris}{PathPart}s, which ends in a \mintinline{idris}{Handler}:
+\begin{minted}{idris}
+||| Describes a Path. A Path consists of path parts followed by a handler
+data Path : (capture : Type) -> 
+            (query : Type) ->
+            (req : Type) ->
+            (res : Type) -> Type where
+  ||| Ends a path with a handler
+  ||| @ handler the handler
+  Outputs : (handler : Handler req res) -> Path capture query req res
+  ||| Conses a pathpart to a path
+  (:>) : PathPart capture query -> Path capture query req res -> Path capture query req res
+infixr 5 :>
+\end{minted}
+
+The Path we just described can now be written as
+\begin{minted}{idris}
+   Const "users"
+:> Capture "user_id" INT
+:> QueryParam "search" STRING
+:> Outputs (GET USER)
+\end{minted}
+
+The universe implementation is straightforward for paths, except for
+that we do not wannt to have spurious arguments in case when we encounter
+a \mintinline{idris}{Const}:
+\begin{minted}{idris}
+( Universe capture
+, Universe query
+) => Universe (PathPart capture query) where
+  el (Const path) = ()
+  el (Capture name type) = el type
+  el (QueryParam name type) = el type
+
+
+( Universe capture
+, Universe query
+, Universe req
+, Universe resp
+) => Universe (Path capture query req resp) where
+  -- special case because we don't like () in our handler functions
+  el (Const path :> right) =  el right
+  el (pathPart :> right) = el pathPart -> el right
+  el (Outputs handler) = el handler
+\end{minted}
+
+\subsubsection{The API Datatype}
+Finally, we define an \mintinline{idris}{API} as an non-empty list of \mintinline{idris}{Path}s.
+
+\begin{minted}{idris}
+data API : (capture : Type) -> (query : Type) -> (req : Type) -> (res : Type) -> Type where
+  OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
+\end{minted}
+
+The universe implementation of an API is the type of a list of handlers.
+Every handler is of a different type though, so instead of using an ordinary list,
+we use an heterogenous list, where each element \mintinline{idris}{x} in \mintinline{idris}{xs}
+is of type \mintinline{idris}{el x}.
+\begin{minted}
+( Universe capture
+, Universe query
+, Universe req
+, Universe res
+) => Universe (API capture query req res) where
+  el (OneOf xs) = HVect (map el xs)
+
 \subsection{A simple interpreter: Documentation generation}
 Here we will show a simple interpretation of the DSL, by generating some basic documentation.
 It's basically a function \mintinline{idris}{docs : API -> String}. 
-\subsection{An interpreter for an HTTP Server}
+\subsection{An interpreter for an HTTP Server}\label{sec:server}
 A more advanced example where we define two interpreters. One 'interpreter' that generates types from our DSL such that we can type-check our server handler implementations. (The universe pattern), and another interpreter that routes requests to these handler implementations.
 \subsubsection{Checking explicit status codes}
 Shows that we can enforce explicit status codes
