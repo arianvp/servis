@@ -13,15 +13,18 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-In this paper, we describe a DSL for web APIs named Servis. Servis is heavily inspired by Servant, a haskell type-level DSL for web APIs,  but tries to solve identified shortcomings by using a dependently typed language called Idris. Servis uses the universe pattern to deduce types from an API description such that we can verify at compile time that the implementation of the API matches the description.
+\emph{TODO}
+%In this paper, we describe a DSL for web APIs named Servis. Servis is heavily inspired by Servant, a haskell type-level DSL for web APIs,  but tries to solve identified shortcomings by using a dependently typed language called Idris. Servis uses the universe pattern to deduce types from an API description such that we can verify at compile time that the implementation of the API matches the description.
 
-Furthermore, we take a look at if dependent types can bring more to the table in terms of expressiveness of API descriptions than the original Servant DSL\@. Specifically, we introduce $\pi$-types to describe interdependencies within an API description.
+%Furthermore, we take a look at if dependent types can bring more to the table in terms of expressiveness of API descriptions than the original Servant DSL\@. Specifically, we introduce Sigma-types to describe interdependencies within an API description.
 
-  TODO: rewrite abstract \emph{after} I finish the paper :-)
+% TODO: rewrite abstract \emph{after} I finish the paper :-)
 
 \end{abstract}
 
 \section{Introduction}
+\emph{TODO expand and reword}
+
 Servant is an extensible type-level DSL for Haskell, that tries to make web APIs \emph{first-class}~\cite{servant}. A web API should be a thing that can be named, passed to, or returned by functions. Just like any other term in a language.
 
 It does this by describing the DSL at the type-level. And then uses \emph{type families} (type-level functions) to be able to perform computations on the API specifications.  Using these type families, we are able to write different \emph{interpretations} of an API\@.  Example of interpretations are: generating documentation from a specification, generating types of a server implementation, or even generating a client that can interfact with the API\@.
@@ -50,7 +53,7 @@ data JSON
 \label{lab:servant}
 \end{listing}
 
-TODO give a short overview of servant
+\emph{TODO give a short overview of servant}
 
 
 
@@ -62,7 +65,7 @@ Idris is a language that in syntax is rather similar to Haskell, but has a more 
 
 Though haskell has type-level functions (called type-families), it does not allow these functions to dpend on term-level values. There is a distinct boundary between type-level and term-level, whilst the two are merged in Idris. This makes doing computations with types a lot more natural (no special constructs are needed, just write functions), but also lets us do some more powerful stuff like letting types actually depend on runtime user input.
 
-Dependent Haskell is currently in the making, and probably planned for around GHC version 8.6~\cite{neeeded}. In the future, it would probably be very feasible to port this library back to Haskell and bring all the benefits along with it.
+Dependent Haskell is currently in the making, and probably planned for around GHC version 8.6. In the future, it would probably be very feasible to port this library back to Haskell and bring all the benefits along with it.
 
 \subsection{Contributions}
 In this paper, I make the following contributions:
@@ -122,7 +125,7 @@ getTrack            :: Maybe T.Text
   \label{code:interpret}.
 \end{listing}
 
-Preferably, one would want to define a new open kind \mintinline{haskell}{API} such that \mintinline{haskell}{(:>) :: API -> API -> API}, but this is not possible in Haskell (or Idris). Instead, one could define a closed kind (using \textt{XDataKinds}), in which we define the entire Servant DSL. This would mean we would lose extensibility of the DSL, but we gain kind-safety.
+Preferably, one would want to define a new open kind \mintinline{haskell}{API} such that \mintinline{haskell}{(:>) :: API -> API -> API}, but this is not possible in Haskell (or Idris). Instead, one could define a closed kind (using \texttt{XDataKinds}), in which we define the entire Servant DSL. This would mean we would lose extensibility of the DSL, but we gain kind-safety.
 
 Also, as described in Section~\ref{sec:servant_intro}, the Servant DSL is split up in several semantic portions.  For example, \mintinline{haskell}{:>} should take an \mintinline{haskell}{item} on the left-hand side, which describes either a constraint like \mintinline{haskell}{ReqBody} or a path-piece, whilst the right-hand side should be an \mintinline{haskell}{api}. These semantic portions are implict and not checked though. So we can create totally non-sensical API types like \mintinline{haskell}{type Nonsense = (Int :>Int) :<|> ("hey ":> Int)} that have no interpretation at all.
 
@@ -130,14 +133,19 @@ Instead of having these implicit semantic rules about what kind of arguments an 
 
 Another implict rule is, that a chain of \mintinline{haskell}{:>} should always end in a \mintinline{haskell}{Get} or a \mintinline{haskell}{Post}. So this should be invalid: \mintinline{haskell}{type API = "a" :> ReqBody [JSON] User}.  This can also not be checked if we do not add more fine-grained kinds to the DSL.
 
-\subsection{Explicit status codes}
-An API that describes how stuff goes right is good, and API that describes how stuff goes wrong is great. But currently, Servant has no way to indicate in the API description what kind of status codes an endpoint can return. Thus this also does not show up in the generated documentation.
-
-It would be nice to add a list of possible status codes that an endpoint can returns, and then also be able to check whether a server implementation actually only returns one of the specified status codes if something goes wrong (or right).
+\subsection{API Interdependencies}
+\label{sec:inter}
+Sometimes, one one like to describe even more type-safety than currently possible in Servant. Maybe we want to let the output-type of a request depend on a query parameter. A use case could be the following: We have a route \texttt{"/users/list?limit=100}", and we want to make sure that a handler never returns more than 100 users.  Thus the return type of the handler should be a \mintinline{idris}{BoundedList 100 User}. Or more generally, the return type should be \mintinline{idris}{BoundedList limit User}, where \mintinline{idris}{limit : Nat} comes from parsing the URL.  The full type of the API will thus depend on some runtime value. This is a textbook example of dependent types, and is currently not possible to implement in Haskell. However, with idris this should be a breeze.
 
 \subsection{Overlapping routes}
 Another problem with Servant is that there is no protection for overlapping routes. If two routes could resolve to the same path, Servant makes a left-biased choice~\cite{servant}.
-It would be nice if we could verify at compile time that no routes in an API specification can overlap.
+It would be nice if we could verify at compile time that no routes in an API specification can overlap and give the user an error if he violates the overlapping constraint.
+
+
+\subsection{Explicit status codes}
+An API that describes how stuff goes right is good, and API that describes how stuff goes wrong is great. But currently, Servant has no way to indicate in the API description what kind of status codes an endpoint can return. Thus this also does not show up in the generated documentation.
+
+It would be nice to add a list of possible status codes that an endpoint can returns, and then possibly also be able to check whether a server implementation actually only returns one of the specified status codes if something goes wrong (or right).
 
 \begin{listing}
 \begin{minted}{haskell}
@@ -150,8 +158,8 @@ It would be nice if we could verify at compile time that no routes in an API spe
 
 
 \section{Servis}
-In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to specification defined by the API DSL\@. Next, we'll look at solving the overlapping routes problem by writing proofs in Idris.
-Finally, we will extend the DSL to add \emph{pi-types}, allowing us to describe dependencies in our API\@.  For example, one might want to describe  the size of a list of users in the API, but let the size depend on a query parameter \emph{limit} that limits the response size.  It would then force the implementor of the API to only return values smaller or equal to limit in size.
+In this section, I present a DSL in Idris named Servis. It tries to address each issue listed in Section~\ref{sec:issues}. Firstly, we will define the DSL in which we can write API specifications. Then, we will look at how to write an interpreter of this DSL that generates documentation. Then, we will look at how we would implement HTTP webserver handlers that adhere to specification defined by the API DSL\@. Next, we'll look at solving the overlapping routes problem by using Idris's automatic proof search.
+Finally, we will extend the DSL to add dependent types, allowing us to describe dependencies in our API\@.  For example, one might want to describe  the size of a list of users in the API, but let the size depend on a query parameter \emph{limit} that limits the response size.  It would then force the implementor of the API to only return values smaller or equal to limit in size.
 
 \subsection{The Universe pattern}
 The Servis DSL makes use of the Universe pattern to map an API description to types of handlers.
@@ -181,7 +189,7 @@ handler : el api
 handler = getUser
  \end{minted}
 \subsection{The DSL}
-So what does this type \mintinline{idris}{API} look like?
+So what does this type \mintinline{idris}{API} look like? An API DSL should allow us to define routes, to which we can attach handler types.
 \subsubsection{Handler}\label{sec:handler}
 Before we will look at routes, lets think of what an endpoint should look like.
 We should be able to handle the HTTP verbs. We will only implement \mintinline{idris}{GET} and \mintinline{idris}{POST}, because the others are very similar.
@@ -290,6 +298,13 @@ data PathPart : (capture : Type) -> (query : Type) -> Type where
   ||| @ name  the name of the variable
   ||| @ type  the type of the variable
   QueryParam : (name : String) -> (type : query) -> PathPart capture query
+
+( Universe capture
+, Universe query
+) => Universe (PathPart capture query) where
+  el (Const path) = ()
+  el (Capture name type) = el type
+  el (QueryParam name type) = el type
 \end{minted}
 
 A \mintinline{idris}{Path} is simply a list if \mintinline{idris}{PathPart}s, which ends in a \mintinline{idris}{Handler}:
@@ -307,6 +322,16 @@ data Path : (capture : Type) ->
          Path capture query req res ->
          Path capture query req res
 infixr 5 :>
+
+( Universe capture
+, Universe query
+, Universe req
+, Universe resp
+) => Universe (Path capture query req resp) where
+  -- special case because we don't like () in our functions
+  el (Const path :> right) =  el right
+  el (pathPart :> right) = el pathPart -> el right
+  el (Outputs handler) = el handler
 \end{minted}
 
 The Path we just described can now be written as
@@ -344,8 +369,12 @@ a \mintinline{idris}{Const}:
 Finally, we define an \mintinline{idris}{API} as an non-empty list of \mintinline{idris}{Path}s.
 
 \begin{minted}{idris}
-data API : (capture : Type) -> (query : Type) -> (req : Type) -> (res : Type) -> Type where
-  OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
+data API : (capture : Type) ->
+           (query : Type) ->
+           (req : Type) ->
+           (res : Type) -> Type where
+  OneOf : (paths : Vect (S n) (Path capture query req res)) ->
+          API capture query req res
 \end{minted}
 
 The universe implementation of an \mintinline{idris}{API} is the type of a list of handlers.
@@ -375,12 +404,12 @@ record User where
   password : String
 
 
-findUserByName : String -> IO (List User)
-getUsers : (limit : Int) -> IO (List User)
+findUserByEmail : String -> IO (List User)
+getUsers : (limit : Nat) -> IO (List User)
 getUserById : (id : Int) -> IO User
-addUser : User -> IO ()
+addUser : User -> IO User
 \end{minted}
-\label{domain}
+\label{code:domain}
 \caption{The User object and its interactions}
 \end{listing}
 
@@ -392,9 +421,10 @@ the need of coming up with universes for captures, query params, request body, a
 data QueryUniverse
   = QSTRING
   | QINT
+  | QNAT
 Universe QueryUniverse where
   el QSTRING = String
-  el QINT = Int
+  el QNAT = Nat
 
 data CaptureUniverse
   = CINT
@@ -418,9 +448,20 @@ userAPI = OneOf
     Outputs (GET (LIST USER))
   , Const "users" :> Outputs (POST USER)
   , Const "users" :>
-    QueryParam "limit" QINT :>
+    QueryParam "limit" QNAT :>
     Outputs (GET (LIST USER))
   ]
+
+
+-- set the handlers
+handlers : el userAPI
+handlers =
+  [ getUserById
+  , findUserByEmail
+  , addUser
+  , getUsers
+  ]
+
 \end{minted}
 \label{code:api}
 \caption{API definition for users}
@@ -503,7 +544,7 @@ the \mintinline{idris}{HasDocs} interface, will evaluate to a very basic form of
 ## GET
  Response type: LIST USER
 
-# /users?limit=<QINT>
+# /users?limit=<QNAT>
 ## GET
  Response type: LIST USER
 
@@ -512,9 +553,6 @@ the \mintinline{idris}{HasDocs} interface, will evaluate to a very basic form of
 Request type: USER
 Response type: USER
 
-# /users?limit=<QINT>
-## GET
- Response type LIST USER
 \end{verbatim}
 
 \subsection{An interpreter for an HTTP Server}\label{sec:server}
@@ -635,35 +673,260 @@ by calling the handler and encoding its result.
     Just (map (toResponse responseType) (handler request))
 \end{minted}
 
-\subsection{A proof of non-overlapping routes}
-We will describe types for helping prove that routes in an API definition don't overlap.  We do this
-by providing Decidable Equality proofs for all parts of our DSL.
+Now we will look at how we will route a \mintinline{idris}{Path}. As we know, a path 
+is a description of how we extract information from the URL. Because parsing URLs
+is out of scope, we will assume that URLs are already parsed when they are fed into our
+routing machinery as the following datatype:
+\begin{minted}{idris}
+record URL where
+  constructor MkURL
+  pathParts : List String
+  params : List (String, String)
+\end{minted}
+
+\clearpage
+We will now give a step-by-step description of the path router.
+\begin{minted}{idris}
+( FromCapture capture
+, FromQueryParam query
+, FromRequest req
+, ToResponse resp
+) => HasServer (Path capture query req resp) where
+  -- routing a Const is simple. Just make sure the const matches
+  -- the next path part
+  route ((Const path) :> right)
+        handler
+        (MkURL pathParts params) 
+        requestBody =
+    case pathParts of
+      -- if there are no pathParts left, abort. There is no match!
+      [] => Nothing
+      (x::xs) => do
+        -- make sure the pathPart we consume matches the path part we expect
+        guard (x == path)
+        --- recurse on the remaining path parts
+        route right handler (MkURL xs params) requestBody
+
+  -- To route a capture, we pass the captured variable along to our handler
+  route ((Capture name type) :> right)
+        handler
+        (MkURL pathParts params)
+        requestBody =
+    case pathParts of
+      -- if there are no pathParts left, abort. There is no match!
+      [] => Nothing
+      (x::xs) => do
+        -- try to parse the pathPart as a capture parameter of the right type
+        -- abort if this fials
+        capture <- fromCapture type x
+        -- pass the parsed capture to handler, and recurse on
+        -- the other pathparts
+        route right (handler capture) (MkURL xs params) requestBody
+\end{minted}
+\pagebreak
+\begin{minted}{idris}
+  -- To route a query param, we look up the query param in the URL,
+  -- and pass it to the handler
+  route ((QueryParam name type) :> right)
+        handler
+        (MkURL pathParts params)
+        requestBody = do
+    -- make sure the query param that was expected exists
+    val <- lookup name params
+    -- try parse it to the appropriate type
+    param <- fromQueryParam type val
+    -- remove the parsed query param from the URL
+    let newParams = dropWhile ((== name) . fst) params
+    -- apply the param to the handler,
+    -- and recurse on the url without the query param
+    route right (handler param) (MkURL pathParts newParams) requestBody
+\end{minted}
+
+Routing multiple paths is easy. We just keep on trying consecutive paths until one
+doesn't return \mintinline{idris}{Nothing}:
+
 \begin{minted}{idris}
 
+( FromCapture capture
+, FromQueryParam query
+, FromRequest req
+, ToResponse resp) =>
+  HasServer (API capture query req resp) where
+
+  route (OneOf (path :: []))
+        (handler :: [])
+        url
+        requestBody =
+    -- if no handlers are left but this one.
+    -- We should allow it to fail
+    route path handler url requestBody
+  route (OneOf (path :: x :: xs))
+        (handler :: h :: handlers)
+        url
+        requestBody =
+    -- if other handlers are present. Try the handler
+    -- and otherwise try others
+    case route path handler url requestBody of
+      Nothing =>
+        route (OneOf (x :: xs))
+              -- NOTE: this is to help the compiler select correct type
+              (the (HVect _ ) (h :: handlers)
+              url
+              requestBody
+      a => a
 \end{minted}
-\subsection{Pi-types}
-Adds dependent pairs to our DSL such that we can describe dependencies between query params, captures and return types.  Example:
+\subsection{A proof of non-overlapping routes}
+\emph{TODO}
+\subsection{Adding API interdependencies}
+As discussed in Section~\ref{sec:inter}, it would be nice to describe more complexly typed APIs, where we allow interdependencies within an API path.
 
-\begin{minted}{haskell}
-exampleOfDependentPath : Path EmptyU QueryU EmptyU RespU
-exampleOfDependentPath =
-  QueryParam "limit" NAT :*> \limit => Outputs (GET (BLIST limit USER))
+We can easily add this functionality to our DSL by introducing a \emph{dependent} version of \mintinline{idris}{:>}, named
+\mintinline{idris}{:*>} in the \mintinline{idris}{Path} datatype.
+What we want is that that the value of the lefthand-side of \mintinline{idris}{:*>} influences the type of the right-hand side.
+\begin{minted}{idris}
+data Path : capture -> query -> req -> res -> Type where
+  Outputs : (handler : Handler req res) -> Path capture query req res
+  (:>) :  (pathPart : PathPart capture query) ->
+          (path : Path capture query req res) -> Path capture query req res
+  -- The RHS of :*> now takes a function instead of a path. that calculates a path
+  (:*>) : (pathPart : PathPart capture query) ->
+          (path : (el pathPart -> Path capture query req res)) ->
+          Path capture query req res
+\end{minted}{idris}
+This is enough to express basic dependent APIs.
 
-getUsersLimit : (limit : Nat) -> IO (BoundedList limit User)
-getUsersLimit limit = pure . take limit $ users
-
-exampleOfDependentPathHandler : el Example.exampleOfDependentPath
-exampleOfDependentPathHandler = getUsersLimit
-
+A good usecase for these kind of dependent types is for endpoints that return a \mintinline{idris}{BoundedList}.
+A bounded list in idris is a list that can only contain upto a certain amount of elements. It is defined as follows:
+\begin{minted}{idris}
+data BoundedList : Nat -> Type -> Type where
+  Nil : BoundedList n a
+  (::) : a -> BoundedList n a -> BoundedList (S n) a
 \end{minted}
-\subsection{New problems that pi-type create}
-Here we will describe how pi-types adds problems. For example we cannot easily generate documentation anymore, prove that there are no overlapping routes, or prove that statuscodes are adhered to.
 
-\section{Summary}
+Lets extend our Universe of Listing~\ref{code:api} to include bounded lists:
+\begin{minted}{idris}
+data ReqResUniverse
+  = USER
+  | LIST ReqResUniverse
+  | BLIST Nat ReqResUniverse
+Universe ReqResUniverse where
+  el USER = User
+  el (LIST a) = List (el a)
+  el (BLIST n a) = BoundedList n (el a)
+\end{minted}
+And lets modify the domain function that queries the database for users
+in Listing~\ref{code:domain} to return bounded lists:
+
+\begin{minted}{idris}
+getUsers : (limit : Nat) -> IO (BoundedList limit User)
+\end{minted}
+We can now describe an API in which we can describe the dependency between the query parameter
+and the size of the returned list of users.
+\begin{minted}{idris}
+getUsersPath : Path CaptureUniverse QueryUniverse ReqResUniverse ReqResUniverse
+getUsersPath = Const "users" :> 
+              QueryParam "limit" QNAT :*>
+              \limit => Outputs (GET (BLIST limit USER))
+
+handler : el getUsersPath
+handler = getUsers
+\end{minted}
+
+Next, we will need to add extra cases to the \mintinline{idris}{HasServer}
+implementation of \mintinline{idris}{Path} to handle the dependency. We
+will only show the implementation for \mintinline{idris}{QueryParam},
+but the changes to make \mintinline{idris}{Capture} work are identical.
+
+The idea is, that instead of only passing the parsed query parameter value
+to the handler, we also pass it along to the right hand side of \mintinline{idris}{:*>}:
+\begin{minted}{idris}
+  route ((QueryParam name type) :*> right)
+        handler
+        (MkURL pathParts params)
+        requestBody = do
+    val <- lookup name params
+    param <- fromQueryParam type val
+    let newParams = dropWhile ((== name) . fst) params
+    -- BEFORE :
+--  route right 
+--        (handler param)
+--        (MkURL pathParts newParams)
+--         requestBody
+    -- WITH ADDED DEPENDENCY:
+    route (right param) -- <- note the extra argument passed to RHS
+          (handler param)
+          (MKURL pathParts newParams)
+          requestBody
+\end{minted}
+And that's it. we now have added dependent types to our API!
+
+\subsection{New problems that dependent types create}
+The dependent types are nice, but our datatype is now a Higher-order abstract syntax instead of a first-order abstract syntax.
+Which means the datatype contains a function.  This makes it difficult to generate documentation as we need to provide a value
+to apply to the function to traverse the datatype. It isn't impossible though. We could introduce the following interface:
+\begin{minted}{idris}
+interface Universe u => HasSample u where
+  sample : (v : u) -> el v
+
+data ExampleU = INT | STRING
+
+Universe ExampleU where
+  el INT = Int
+  el STRING = String
+
+HasSample ExampleU where
+  sample INT = 0
+  sample STRING = "A string"
+\end{minted}
+Now in our implementation of \mintinline{idris}{HasDocs} we can just call \mintinline{idris}{sample}
+every time we encounter a function:
+\begin{minted}{idris}
+HasDocs (Path capture query req res) where
+  docs ((Capture str type) :*> f) =
+    "super nice docs"  ++ docs (f (sample type))
+\end{minted}
+
+The real problem though is that this representation breaks the overlapping path detector.
+The overlapping path detector uses the feature of idris to search proofs automatically. But that
+proof search isn't perfect, and won't be able to prove that paths overlap or not if we have
+arbitrary functions in our datatypes.
+
+A solution this problem would be that library authors would have to provide their own proof
+of whether or not their api definitions overlap, but this can be very cumbersome and thus
+is undesired.
+
 \section{Related work}
-Talk about tel/serv. An inspiration for this project.
-\section{Conclusions and future work}
+This project was heavily inspired by \url{https://github.com/tel/serv}. Which is
+a closed-kinded Servant alternative. When I stumbled upon it, I got very curious
+what would happen if we would port it to Idris.  The serv source code is kind of
+dense because Haskell isn't a very nice language to do type-level programming in
+and it got me curious whether or not idris would improve readability. Which it did!
 
+Also, once I had a working example of Serv in idris, I wanted to see if idris
+could add any new tricks to it. This made me implement dependent types and
+route conflict resolution.
+
+\section{Conclusions and future work}
+Idris allows us to elegantly describe APIs with plain ol' datatypes. We
+can then use the Universe pattern to map these datatypes to handler
+function types. These handler function types can then be made routable
+by writing an interpreter of the API datatype that decodes the incoming
+requests and passes the correct parameters to the handlers.
+
+Idris makes it easier to write utility functions, like documentation generation
+or code generation, because our API definition does not live in the type-level
+anymore, because type-level and term-level are united in idris.
+
+We were able to solve the common mistake of overlapping routes in Servant as well,
+by using Idris's proof search capabilities.
+
+Finally, we were able to implement an dependent API, that allows interdependencies
+within paths to be able to describe even more powerful APIs.
+
+In the future, it would be interesting to look at if it's possible to enforce in 
+the type-system that handlers only return HTTP Status codes that are defined
+in the API description. I explored some ideas on how to implement this, but
+did not have the time to do an implementation of this.
 \bibliography{sources}
 \bibliographystyle{plain}
 \end{document}
