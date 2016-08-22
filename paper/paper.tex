@@ -136,7 +136,7 @@ An API that describes how stuff goes right is good, and API that describes how s
 It would be nice to add a list of possible status codes that an endpoint can returns, and then also be able to check whether a server implementation actually only returns one of the specified status codes if something goes wrong (or right).
 
 \subsection{Overlapping routes}
-Another problem with Servant is that there is no protection for overlapping routes. If two routes could resolve to the same path, Servant makes a left-biased choice~\cite{needed}.
+Another problem with Servant is that there is no protection for overlapping routes. If two routes could resolve to the same path, Servant makes a left-biased choice~\cite{servant}.
 It would be nice if we could verify at compile time that no routes in an API specification can overlap.
 
 \begin{listing}
@@ -155,7 +155,7 @@ Finally, we will extend the DSL to add \emph{pi-types}, allowing us to describe 
 
 \subsection{The Universe pattern}
 The Servis DSL makes use of the Universe pattern to map an API description to types of handlers.
- A universe is a type \mintinline{idris}{U : Type} which contains names for types and a type family \mintinline{idris}{el : U -> Type} that assigns to every name \mintinline{idris}{a : U} the type of its elements \mintinline{idris}{el a : Type} \cite{generic}\@.
+ A universe is a type \mintinline{idris}{U : Type} which contains names for types and a type family \mintinline{idris}{el : U -> Type} that assigns to every name \mintinline{idris}{a : U} the type of its elements \mintinline{idris}{el a : Type} \cite{Altenkirch}\@.
 
  In idris, we could define this as the following interface:
  \begin{listing}
@@ -171,7 +171,7 @@ interface Universe (u : Type) where
 
 -- we define a value of API
 api : API
-api = Const "users" :> Capture Int "userId" :> Outputs (Get USER)
+api = Const "users" :> Capture Int "userId" :> Outputs (GET User)
 
 getUser : Int -> IO User
 getUser = ?someDatabaseMagic
@@ -182,7 +182,7 @@ handler = getUser
  \end{minted}
 \subsection{The DSL}
 So what does this type \mintinline{idris}{API} look like?
-\subsubsection{Handler}
+\subsubsection{Handler}\label{sec:handler}
 Before we will look at routes, lets think of what an endpoint should look like.
 We should be able to handle the HTTP verbs. We will only implement \mintinline{idris}{GET} and \mintinline{idris}{POST}, because the others are very similar.
 For a \mintinline{idris}{GET}, we should be able to specify a return type of the handler,  and for a \mintinline{idris}{POST}, we should be able to
@@ -303,7 +303,9 @@ data Path : (capture : Type) ->
   ||| @ handler the handler
   Outputs : (handler : Handler req res) -> Path capture query req res
   ||| Conses a pathpart to a path
-  (:>) : PathPart capture query -> Path capture query req res -> Path capture query req res
+  (:>) : PathPart capture query ->
+         Path capture query req res ->
+         Path capture query req res
 infixr 5 :>
 \end{minted}
 
@@ -346,7 +348,7 @@ data API : (capture : Type) -> (query : Type) -> (req : Type) -> (res : Type) ->
   OneOf : (paths : Vect (S n) (Path capture query req res)) -> API capture query req res
 \end{minted}
 
-The universe implementation of an API is the type of a list of handlers.
+The universe implementation of an \mintinline{idris}{API} is the type of a list of handlers.
 Every handler is of a different type though, so instead of using an ordinary list,
 we use an heterogenous list, where each element \mintinline{idris}{x} in \mintinline{idris}{xs}
 is of type \mintinline{idris}{el x}.
@@ -357,69 +359,287 @@ is of type \mintinline{idris}{el x}.
 , Universe res
 ) => Universe (API capture query req res) where
   el (OneOf xs) = HVect (map el xs)
+\end{minted}.
+
+\subsection{An example API}
+Using this DSL, we will now describe an API for interacting with users in a database.
+We will start of with defining our domain objects, and intercations we could do with them.
+
+\begin{listing}
+\begin{minted}{idris}
+record User where
+  constructor MkUser
+  id : Int
+  name : String
+  email : String
+  password : String
+
+
+findUserByName : String -> IO (List User)
+getUsers : (limit : Int) -> IO (List User)
+getUserById : (id : Int) -> IO User
+addUser : User -> IO ()
+\end{minted}
+\label{domain}
+\caption{The User object and its interactions}
+\end{listing}
+
+Next, we will describe the HTTP API for interacting with these users.  This includes
+the need of coming up with universes for captures, query params, request body, and response.
+
+\begin{listing}
+\begin{minted}{idris}
+data QueryUniverse
+  = QSTRING
+  | QINT
+Universe QueryUniverse where
+  el QSTRING = String
+  el QINT = Int
+
+data CaptureUniverse
+  = CINT
+Universe CaptureUniverse where
+  el CINT = Int
+
+-- Note: We use the same universe for requests and responses.
+data ReqResUniverse
+  = USER
+  | LIST ReqResUniverse
+Universe ReqResUniverse where
+  el USER = User
+  el (LIST a) = List (el a)
+
+userAPI : API QueryUniverse CaptureUniverse ReqResUniverse ReqResUniverse
+userAPI = OneOf
+  [ Const "users" :> Capture "user_id" CINT :> Outputs (GET USER)
+  , Const "users" :>
+    Const "find" :>
+    QueryParam "email" QSTRING :>
+    Outputs (GET (LIST USER))
+  , Const "users" :> Outputs (POST USER)
+  , Const "users" :>
+    QueryParam "limit" QINT :>
+    Outputs (GET (LIST USER))
+  ]
+\end{minted}
+\label{code:api}
+\caption{API definition for users}
+\end{listing}
 
 \subsection{A simple interpreter: Documentation generation}
-Here we will show a simple interpretation of the DSL, by generating some basic documentation.
-It's basically a function \mintinline{idris}{docs : API -> String}. 
+Writing an interpreter for generating documentation is very easy. Our API description isn't some type-level definition, it's just a plain old datatype that can be passed to functions and can be manipulated.
+
+We start by introducing an interface for docs:
+\begin{minted}{idris}
+interface HasDocs a where
+  docs :: a -> String
+\end{minted}
+Now, we just define an implementation for \mintinline{idris}{API} for this interface and we're done. Which is just calling \mintinline{idris}{docs} recursively on all its children.
+
+\begin{minted}{idris}
+(HasDocs req, HasDocs res) => HasDocs (Handler req res) where
+  docs (GET responseType) =
+    "## GET\nResponse type: " ++ docs responseType
+
+  docs (POST requestType responseType) =
+    "## POST\nRequest type: "  ++ docs requestType ++ "\n" ++
+    "Response type: " ++ docs responseType ++ "\n"
+
+renderParams : HasDocs query => List (String, query) -> String
+renderParams = renderParams' . reverse
+  where
+    renderParams' : List (String, query) -> String
+    renderParams' [] = ""
+    renderParams' ((a, b) :: []) =
+      "?" ++ a ++ "=<"++ docs b ++ ">"
+    renderParams' ((a, b) :: xs) =
+      renderParams' xs ++ "&" ++ a ++ "=<"++ docs b ++ ">"
+
+renderPath : 
+  ( HasDocs capture
+  , HasDocs query
+  , HasDocs req
+  , HasDocs resp) => Path capture query req resp -> String -> String
+renderPath (Outputs x) params = 
+    params ++ "\n" ++ docs x
+renderPath ((Const x) :> y) params =
+    "/" ++ x ++ renderPath y params
+renderPath ((Capture name type) :> y) params =
+  "/<" ++ name ++ ":" ++ docs type ++ ">" ++ renderPath y params
+renderPath _ _ = ""
+
+( HasDocs capture
+, HasDocs query
+, HasDocs req
+, HasDocs resp
+) => HasDocs (Path capture query req resp) where
+  docs path =
+    "# " ++ renderPath path (renderParams . getParams $ path) ++ "\n"
+    where
+
+      getParams : Path capture query req resp -> List (String, query)
+      getParams (Outputs x) = []
+      getParams ((Const x) :> y) = getParams y
+      getParams ((Capture name type) :> y) = getParams y
+      getParams ((QueryParam name type) :> y) = (name, type) :: getParams y
+
+
+( HasDocs capture
+, HasDocs query
+, HasDocs req
+, HasDocs resp
+) => HasDocs (API capture query req resp) where
+  docs (OneOf (x::[])) = docs x
+  docs (OneOf (x::y::xs)) = docs x ++ "\n" ++ oneOf (y::xs)
+\end{minted}
+
+Now \mintinline{idris}{docs userAPI}, assuming that the universes implement
+the \mintinline{idris}{HasDocs} interface, will evaluate to a very basic form of documentation:
+\begin{verbatim}
+# /users/<user_id:CINT>
+## GET
+ Response type: USER
+# /users/find?email=<QSTRING>
+## GET
+ Response type: LIST USER
+
+# /users?limit=<QINT>
+## GET
+ Response type: LIST USER
+
+# /users
+## POST
+Request type: USER
+Response type: USER
+
+# /users?limit=<QINT>
+## GET
+ Response type LIST USER
+\end{verbatim}
+
 \subsection{An interpreter for an HTTP Server}\label{sec:server}
-A more advanced example where we define two interpreters. One 'interpreter' that generates types from our DSL such that we can type-check our server handler implementations. (The universe pattern), and another interpreter that routes requests to these handler implementations.
-\subsubsection{Checking explicit status codes}
-Shows that we can enforce explicit status codes
+Now that we've shown that it is easy to manipulate APIs because they're just datatypes, it's time for a more complicated example. Though it is cool that we can generate documentation from an API description, the useful part that we want to implement is an HTTP Server.
+
+\subsubsection{A type for web applications}
+Lets first ask the question how a web server should look like in Idris. In the Servant paper, they describe the type of http handlers in the \texttt{wai} library, which looks like \cite{servant}:
+\begin{minted}{haskell}
+type Application = Request -> IO Response
+\end{minted}.
+
+We will more-or-less use this representation to model our HTTP handlers. they are  simply a function from request to response.  The actual implementation of a web server based on this model is out of scope for now, but it would be interesting to port something like Haskells' \texttt{warp} (which impelements this concept) to Idris.
+
+Instead of having two abstract types \mintinline{idris}{Request} and \mintinline{idris}{Response}, we will assume for simplicity that a \mintinline{idris}{Response} is just a \mintinline{idris}{String}, and that a \mintinline{idris}{Request} is an \mintinline{idris}{URL}, and a requestBody of type \mintinline{idris}{Maybe String}.
+
+\begin{minted}{idris}
+Application : Type
+Application = (url : URL) -> (requestBody : Maybe String) -> IO String
+\end{minted}
+
+Just like in the Servant paper, we will need to modify this type a little bit more to suit our needs. We need to be able to express that an \mintinline{idris}{Application} does not match in case of a routing mismatch, such that we can try another route encompassed in \mintinline{idris}{OneOf}. 
+
+Instead of returning  a value of \mintinline{idris}{IO String}, we can return a value of \mintinline{idris}{Maybe (IO String)}, where \mintinline{idris}{Just} signals a route match, whilst \mintinline{idris}{Nothing} signals a route mistmatch such that we can try another route.
+
+\begin{minted}{idris}
+RoutingApplication : Type
+RoutingApplication = (url : URL) ->
+                     (requestBody : Maybe String)
+                     -> Maybe (IO String)
+\end{minted}
+
+\subsubsection{Decoding and encoding data}
+In section~\ref{sec:handler}, we showed that if we want to implement some decoder, we would have to resort
+to the universe pattern. So that is what we will do exactly here.
+
+As an example, we will show how we would decode a queryparam. All other decoders follow the same pattern.
+What we want to do is, given a \mintinline{idris}{queryParam : String}, and a value \mintinline{idris}{v : u},
+where \mintinline{idris}{u} is the universe of query param types, and  \mintinline{idris}{v} a name of a type in that universe,
+perform the correct decoding to get a value of type \mintinline{idris}{el v}.
+
+We can summarize this behaviour in an interface:
+\begin{minted}{idris}
+interface Universe u => FromQueryParam u where
+  fromQueryParam : (v : u) -> String -> Maybe (el v)
+\end{minted}
+
+similarly, we have interfaces for captures and request bodies:
+\begin{minted}{idris}
+interface Universe u => FromCapture u where
+  fromCapture : (v : u) -> String -> Maybe (el v)
+
+interface Universe u => FromRequest u where
+  fromRequest : (v : u) -> String -> Maybe (el v)
+\end{minted}
+
+An implementation of \mintinline{idris}{FromQueryParam} for the universe \mintinline{QueryUniverse} in Listing~\ref{code:api}, would look like this:
+
+\begin{minted}{idris}
+FromQueryParam QueryU where
+  fromQueryParam QINT str = maybeParseInt str
+\end{minted}
+
+The fact that we can pattern match on the universe lets us inspect what type we need to return,
+and select the right decoder accordingly.
+
+We can use the same technique for encoding responses:
+\begin{minted}{idris}
+interface Universe u => ToResponse u where
+  toResponse : (v : u) -> el v -> String
+
+\end{minted}
+
+For example, we could use this to encode values in the \mintinline{idris}{ReqResUniverse} universe from
+Listing~\ref{code:api}:
+\begin{minted}{idris}
+  ToResponse ReqResUniverse where
+    toResponse USER (MkUser id name email password) =
+      "MkUser " ++ show id ++ " " ++ show name
+    toResponse (LIST elem) xs =
+      foldr (++) ""  . map (toResponse elem) $ xs
+\end{minted}
+
+\subsubsection{Routing requests}
+We will define the following interface to implement routing requests:
+\begin{minted}{haskell}
+interface Universe u => HasServer u where
+  route : (v : u) -> (handler : el v) -> RoutingApplication
+\end{minted}
+Or if we expaned the definition \mintinline{idris}{RoutingApplication}:
+\begin{minted}{haskell}
+interface Universe u => HasServer u where
+  route : (v : u) ->
+          (handler : el v) ->
+          (url : URL) ->
+          (requestBody : Maybe String)
+          -> Maybe (IO String)
+\end{minted}
+
+The idea of the router is, that given some part of the API \mintinline{idris}{v : u}, and a handler of type \mintinline{idris}{el v}, build an application that can either route succesfully or fail. Preferably, the application uses the handler parameter in its implementation of course.
+
+Lets start by defining an \mintinline{idris}{HasServer} instance for \mintinline{idris}{Handler}. Its task is to simply encode responses to Strings, and to handle request bodies to calculate responses
+by calling the handler and encoding its result.
+\begin{minted}{idris}
+(FromRequest req, ToResponse res) => HasServer (Handler req res) where
+  -- route : Handler req res -> 
+  --         (handler : IO res) ->
+  --         URL -> Maybe String -> Maybe (IO String)
+  ||| simply turn an (IO res) into an (IO String) 
+  ||| using toResponse
+  route (GET responseType) handler url requestBody =
+    Just (map (toResponse responseType) handler)
+  route (POST requestType responseType) handler url requestBody = do
+    -- see if there is a requestBody. otherwise fail
+    body <- requestBody
+    -- try to decode the request. this might fail and return Nothing
+    request <- fromRequest requestType body
+    -- apply the decoded request to the handler, and encode the result
+    Just (map (toResponse responseType) (handler request))
+\end{minted}
 
 \subsection{A proof of non-overlapping routes}
 We will describe types for helping prove that routes in an API definition don't overlap.  We do this
 by providing Decidable Equality proofs for all parts of our DSL.
 \begin{minted}{idris}
 
-||| A Proof that the GET dtor is injective over its requestType
-injGET : (GET x = GET y) -> x = y
-injGET Refl = Refl
-
-||| A proof that the POST dtor is injective over its requestType
-injPOSTReq : (POST requestType1 responseType1 = POST requestType2 responseType2) -> requestType1 = requestType2
-injPOSTReq Refl = Refl
-
-||| A Proof that the POST dtor is injective over its responseType
-injPOSTResp : (POST requestType1 responseType1 = POST requestType2 responseType2) -> responseType1 = responseType2
-injPOSTResp Refl = Refl
-
-||| A Proof that a GET is not a POST
-getNotPost : (GET responseType = POST requestType responseType1) -> Void
-getNotPost Refl impossible
-
-||| A proof that GET is congruent
-cong_GET : (prf : responseType1 = responseType2) -> GET responseType1 = GET responseType2
-cong_GET = cong
-
-||| A proof POST is congruent
-cong_POST : (prf2 : responseType1 = responseType2) -> (prf1 : requestType1 = requestType2) -> POST requestType1 responseType1 = POST requestType2 responseType2
-cong_POST Refl Refl = Refl
-
-(DecEq req, DecEq res) => DecEq (Handler req res) where
-  decEq (GET responseType1) (GET responseType2) =
-    (case decEq responseType1 responseType2 of
-          (Yes prf) => Yes (cong prf)
-          (No contra) => No ((\h => contra (injGET h))))
-  decEq (POST requestType1 responseType1) (POST requestType2 responseType2) =
-    (case decEq requestType1 requestType2 of
-          (Yes prf1) => (case decEq responseType1 responseType2 of
-                             (Yes prf2) => Yes (cong_POST prf2 prf1)
-                             (No contra) => No (\h => contra (injPOSTResp h)))
-          (No contra) => No (\h => contra (injPOSTReq h)))
-  decEq (GET _) (POST _ _) = No getNotPost
-  decEq (POST _ _) (GET _) = No (negEqSym getNotPost)
-data DisjointPP : PathPart capture query -> PathPart capture query -> Type where
-  ConstD : Not (str = str') -> DisjointPP (Const str) (Const str')
-
-data DisjointPath : Path capture query req res -> Path capture query req res -> Type where
-  OutputsD : Not (handler1 = handler2) -> DisjointPath (Outputs handler1) (Outputs handler2)
-  PathBase : DisjointPP pp1 pp2 -> DisjointPath (pp1 :> p1) (pp2 :> p2)
-  PathStep : DisjointPath p1 p2 -> DisjointPath (p :> p1) (p :> p2)
-
-
-data DisjointAPI : List (Path capture query req res) -> Type where
-  Base : DisjointAPI []
-  Step : (x : Path capture query req res) -> All (DisjointPath x) xs -> DisjointAPI (x::xs)
 \end{minted}
 \subsection{Pi-types}
 Adds dependent pairs to our DSL such that we can describe dependencies between query params, captures and return types.  Example:
@@ -444,4 +664,6 @@ Here we will describe how pi-types adds problems. For example we cannot easily g
 Talk about tel/serv. An inspiration for this project.
 \section{Conclusions and future work}
 
+\bibliography{sources}
+\bibliographystyle{plain}
 \end{document}
