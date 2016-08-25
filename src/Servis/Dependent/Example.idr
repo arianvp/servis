@@ -86,9 +86,7 @@ execRouter url requestBody =
 complicatedExample : Path EmptyU QueryU EmptyU RespU
 complicatedExample = QueryParam "begin" NAT
         :*> \begin => QueryParam "end" NAT 
-        :*> \end => Outputs $ case isLTE begin end of
-                                  Yes bLTEe => GET (BLIST ((-) end begin {smaller=bLTEe}) USER)
-                                  No _ => GET (BLIST 0 USER)
+        :*> \end => Outputs $ GET (BLIST (end-begin) USER)
 
 complicatedExampleHandler : el Example.complicatedExample
 
