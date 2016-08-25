@@ -94,11 +94,10 @@ Dependent Haskell is currently in the making, and probably planned for around GH
 \subsection{Contributions}
 In this paper, I make the following contributions:
 
-TODO reword
 \begin{itemize}
   \item We point out several problems and limitations of the original Servant DSL
-  \item We show a port of servant to Idris, a dependently-typed language
-  \item We show how new techniques from Idris can help mitigate some of the problems that Servant has.
+  \item We show a port of Servant to Idris, a dependently-typed language
+  \item We show that Idris gives us new techniques to tackle these identified problems
 \end{itemize}
 
 \section{Limitations of Servant}\label{sec:issues}
@@ -507,7 +506,6 @@ To get an idea on how this would work, we will show the implementation of \minti
     "Response type: " ++ docs responseType ++ "\n"
 \end{minted}
 
-% TODO add text
 \begin{minted}{idris}
 ( HasDocs capture
 , HasDocs query
@@ -556,7 +554,6 @@ Instead of having two abstract types \mintinline{idris}{Request} and \mintinline
 Application : Type
 Application = (url : URL) -> (requestBody : Maybe String) -> IO String
 \end{minted}
-% TODO reword a bit
 
 The router we are going to build uses the same mechanism as described in the Servant paper. In order to be able to write a router, we will have
 to modify the definition of \mintinline{idris}{Application} slightly~\cite{servant}. We need to be able to express that the router can not
@@ -603,9 +600,7 @@ We can use the same technique for encoding responses:
 interface Universe u => ToResponse u where
   toResponse : (v : u) -> el v -> String
 \end{minted}
-% TODO reword
-% TODO CHECKED UNTIL HERE. PAGE 11
-For example, we could use this to encode values in the \mintinline{idris}{ReqResUniverse} universe from
+We could use this to encode values in the \mintinline{idris}{ReqResUniverse} universe from
 Listing~\ref{code:api}:
 \begin{minted}{idris}
   ToResponse ReqResUniverse where
