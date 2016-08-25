@@ -1,9 +1,10 @@
 module Servis.Server
 
 import public HTTP.URL
-import public Servis.API
+import Servis.API
 import Data.Vect
 import Data.HVect
+import Data.List
 
 %default total
 %access public export
@@ -26,6 +27,10 @@ interface Universe u => HasServer u where
 (ToResponse resp, FromRequest req) => HasServer (Handler req resp) where
   route (GET responseType) handler url requestBody =
     pure (map (toResponse responseType) handler)
+  route (DGET responseType statuses) (MkDPair status prf, handler) ur requestBody =
+          Just $ do
+            putStrLn status
+            map (toResponse responseType) handler
   route (POST requestType responseType) handler url requestBody = do
     body <- requestBody
     request <- fromRequest requestType body
