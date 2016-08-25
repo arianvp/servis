@@ -766,7 +766,7 @@ data Handler : (req : Type)  -> (res : Type) -> Type where
 
 However, it would be convenient if we could automatically deduce a proof that our handlers never return
 other status codes than are in that list. However, this gets impossible quickly because not all programs are decidable.
-Instead, we can let our \mintinline{idris}{Universe} implementation generate a type that forces the implementor of the API to provide a proof for us. We can accomplish this by letting the universe implementation return a dependent pair. A dependent pair in idris is a tuple where the second element proves some property about the first element. In our case, the first element is the status code, and the second element is the proof that it is one of the pre-defined status codes in our API.
+Instead, we can let our \mintinline{idris}{Universe} implementation generate a type that forces the implementor of the API to provide a proof for us. We can accomplish this by letting the universe implementation return a dependent pair. A dependent pair in Idris is a tuple where the second element proves some property about the first element. In our case, the first element is the status code, and the second element is the proof that it is one of the pre-defined status codes in our API.
 
 We will now show how we would implement for \mintinline{idris}{GET}:
 \begin{minted}{idris}
@@ -877,7 +877,7 @@ We can now define an operator that adds a path to an existing lists of paths, bu
          List (Path c q rq rs)
   (+>) x xs = x::xs
 \end{minted}
-The \mintinline{idris}{auto} keyword signifies that idris will try to automatically find a value fo the implicit argument \mintinline{idris}{all}. If it fails, it will give a compiler error. But if it succeeds, we can be sure that we did not add an overlapping path to our list of paths.
+The \mintinline{idris}{auto} keyword signifies that Idris will try to automatically find a value fo the implicit argument \mintinline{idris}{all}. If it fails, it will give a compiler error. But if it succeeds, we can be sure that we did not add an overlapping path to our list of paths.
 
 We can now make sure that our API definitions are sane. This will compile:
 \begin{minted}{idris}
@@ -928,11 +928,9 @@ data Path : capture -> query -> req -> res -> Type where
 This is enough to express basic dependent APIs.
 
 A good usecase for these kind of dependent types is for endpoints that return a \mintinline{idris}{BoundedList}.
-A bounded list in idris is a list that can only contain upto a certain amount of elements. It is defined as follows:
+A bounded list in Idris is a list that can only contain upto a certain amount of elements. It  has the following signature:
 \begin{minted}{idris}
 data BoundedList : Nat -> Type -> Type where
-  Nil : BoundedList n a
-  (::) : a -> BoundedList n a -> BoundedList (S n) a
 \end{minted}
 
 Lets extend our Universe of Listing~\ref{code:api} to include bounded lists:
@@ -1022,42 +1020,40 @@ not overlap. However, there are a countable infinite number of \mintinline{idris
 Idris would never be able to complete the proof. Hence the auto-searcher will stop searching
 for a proof after a while and quit.
 
-A solution is that library authors can provide the proof themselves. Maybe they can prove with
-additional information that the numbers never get higher than $8$, and that it thus is safe
-to try ever number from $0$ to $8$ to make sure no overlapping path can be generated. However
-writing such proofs can be cumbersome and is thus undesired.
+A solution is that library authors can provide the proof themselves, similarly to how this
+was solved for explicit status code checks.  However, writing these proofs for paths might
+defeat the point. We wanted them to be automatic to have a sanity check to make sure
+people are not caught off guard if certain paths are not routed. Having to write a proof
+for each dependent path you define makes the library cumbersome to use and thus might
+be undesired.
+
+\section{Conclusions}
+Idris allows us to elegently describe APIs as simple terms. We can
+then use the Universe pattern to calculate types for handler.
+These handler functions can then be made routable such that we have
+a function web server.
+
+Idris makes it easier to write utility functions, like documentation generation
+because our API definition does not live in the type-level as it did in Servant.
+
+We were able to solve several shortcomings of servant: By not using an open kind, 
+we eliminated the possibility of writing APIs that are not interpretable.  We also also the possibility
+of defining overlapping routes. W made status codes explicit in the API and gave
+library authors the tools to prove that their servers adhere to these status code
+definitions.  Finally, we were able to implement an dependent API, that allows interdependencies
+within paths to be able to describe even more powerful APIs.
+
+
 \section{Related work}
-This project was heavily inspired by \url{https://github.com/tel/serv}. Which is
+This project started with me looking at\url{https://github.com/tel/serv}. Which is
 a closed-kinded Servant alternative. When I stumbled upon it, I got very curious
 what would happen if we would write something similar Idris.  The serv source code is kind of
 dense because Haskell isn't a very nice language to do type-level programming in
-and it got me curious whether or not idris would improve readability. Which it did!
+and it got me curious whether or not Idris would improve readability. Which it did!
 
 Also, once I had a working example of Serv in idris, I wanted to see if idris
 could add any new tricks to it. This made me implement dependent types and
 route conflict resolution.
-
-\section{Conclusions and future work}
-Idris allows us to elegantly describe APIs with plain ol' datatypes. We
-can then use the Universe pattern to map these datatypes to handler
-function types. These handler function types can then be made routable
-by writing an interpreter of the API datatype that decodes the incoming
-requests and passes the correct parameters to the handlers.
-
-Idris makes it easier to write utility functions, like documentation generation
-or code generation, because our API definition does not live in the type-level
-anymore, because type-level and term-level are united in idris.
-
-We were able to solve the common mistake of overlapping routes in Servant as well,
-by using Idris's proof search capabilities.
-
-Finally, we were able to implement an dependent API, that allows interdependencies
-within paths to be able to describe even more powerful APIs.
-
-In the future, it would be interesting to look at if it's possible to enforce in 
-the type-system that handlers only return HTTP Status codes that are defined
-in the API description. I explored some ideas on how to implement this, but
-did not have the time to do an implementation of this.
 \bibliography{sources}
 \bibliographystyle{plain}
 \end{document}
