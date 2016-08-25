@@ -28,8 +28,6 @@ data Handler : (req : Type)  -> (res : Type) -> Type where
   el (DGET responseType statuses) = (DPair Int (\n => Elem n statuses), IO (el responseType))
 
 
-itIsInStatusCodes : Elem 401 (the (List Int) [200, 401])
-itIsInStatusCodes trivial
 def : Handler EmptyU EmptyU
 def = DGET VOID [200,401,404]
 

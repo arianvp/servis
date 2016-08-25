@@ -30,6 +30,9 @@ HasDocs QueryU where
 
 data NoU
 
+DecEq NoU where
+  decEq a b impossible
+
 Universe NoU where
   el _ = ()
 
@@ -56,6 +59,16 @@ HasDocs RespU where
   docs USER = "User"
   docs (LIST x) = "List (" ++ docs x ++ ")"
 
+
+lel : List (Path CaptureU QueryU NoU RespU)
+lel = 
+  [ Const "user" :> Outputs (GET USER)
+  , Const "user2" :> Outputs (GET (LIST USER))
+  ]
+
+bo : List (Path CaptureU QueryU NoU RespU)
+bo = checkIt lel
+
 UserApi : API CaptureU QueryU NoU RespU
 UserApi = OneOf
   [ Const "user" :> Capture "userId" CINT :> Outputs (GET USER)
@@ -75,3 +88,6 @@ documentation = docs path
 
 userApi : el UserApi
 userApi = [getUserById, getUsersLimit]
+
+
+

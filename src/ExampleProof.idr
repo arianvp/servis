@@ -41,13 +41,9 @@ checked : (api : API a b c d) ->
 checked api = api
 
 api2' : List (Path EmptyU EmptyU EmptyU RespU)
-api2' =  Const "users" :> Capture "name" VOID :> Outputs (GET USER)
-      +> Const "users" :> Capture "name" VOID
-                       :> Const "friends" :> Outputs (GET (USER))
-      +> Nil
-api3' : List (Path EmptyU EmptyU EmptyU RespU)
-api3' =  Const "users" :> Capture "name" VOID :> Outputs (GET USER)
-      +> Const "users" :> Const "all" :> Outputs (GET (USER))
+api2' =  (Capture "name" VOID :> Const "a" :> Outputs (GET USER))
+      +> (Capture "name" VOID :> Const "a"
+                       :> Outputs (GET (USER)))
       +> Nil
 api' : List (Path EmptyU EmptyU EmptyU RespU)
 api' =  path1 +> path2 +> Nil
