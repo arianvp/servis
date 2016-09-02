@@ -36,9 +36,7 @@ interface Universe u => HasServer u where
 , FromRequest req
 , ToResponse resp
 ) => HasServer (Path capture query req resp) where
-
   route (Outputs x) handler url requestBody = route x handler url requestBody
-
   route ((Const path) :> right) handler (MkURL pathParts params) requestBody =
     --  Check if path in url. pop url
     --  Do nothing. because const carries no information
@@ -88,7 +86,6 @@ interface Universe u => HasServer u where
     let newParams = dropWhile ((== name) . fst) params
     route (right param) (handler param) (MkURL pathParts newParams) requestBody
 
-  route (Outputs x) handler url requestBody = route x handler url requestBody
 
 --extractPathInfo : Path capture query req resp -> List (PathPart capture query)
 --extractPathInfo (Handle x) = []

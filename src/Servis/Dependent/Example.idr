@@ -77,18 +77,25 @@ exampleOfDependentPathHandler = getUsersLimit
 router : (url : URL) -> (requestBody : Maybe String) -> Maybe (IO String)
 router = route exampleOfDependentPath  exampleOfDependentPathHandler
 
+  
 
 execRouter : (url : URL) -> (requestBody : Maybe String) -> IO ()
 execRouter url requestBody =
   case router url requestBody of
        Nothing => return ()
        Just x => x >>= putStrLn
-complicatedExample : Path EmptyU QueryU EmptyU RespU
+
+main : IO ()
+main = do
+  x <- getLine
+  execRouter (MkURL [] [("limit", x)]) Nothing
+
+{-complicatedExample : Path EmptyU QueryU EmptyU RespU
 complicatedExample = QueryParam "begin" NAT
         :*> \begin => QueryParam "end" NAT 
         :*> \end => Outputs $ GET (BLIST (end-begin) USER)
 
-complicatedExampleHandler : el Example.complicatedExample
+complicatedExampleHandler : el Example.complicatedExample-}
 
 {-api : API EmptyU QueryU EmptyU RespU
 
